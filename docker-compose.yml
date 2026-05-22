@@ -47,6 +47,7 @@ services:
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_SERVER_ROOT_URL: http://192.168.10.137:3000
       GF_INSTALL_PLUGINS: volkovlabs-echarts-panel
