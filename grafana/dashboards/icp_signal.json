@@ -1,0 +1,57 @@
+{
+  "uid": "mount-midas-signal",
+  "title": "Mount Midas — ICP Signal Chart",
+  "tags": ["mount-midas", "icp", "signal"],
+  "timezone": "browser",
+  "refresh": "5m",
+  "time": { "from": "now-1d", "to": "now" },
+  "timepicker": {
+    "quick_ranges": [
+      { "display": "Tag",    "from": "now-1d",  "to": "now" },
+      { "display": "3 Tage", "from": "now-3d",  "to": "now" },
+      { "display": "Woche",  "from": "now-7d",  "to": "now" },
+      { "display": "Monat",  "from": "now-30d", "to": "now" }
+    ]
+  },
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "ICP Preis — VAH / POC / Signal-Zonen",
+      "type": "volkovlabs-echarts-panel",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "renderer": "canvas",
+        "script": "const isDark = context.grafana.theme.isDark;\nconst gc = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';\nconst tc = isDark ? '#9E9E9E' : '#777';\n\nconst frame = context.panel.data.series[0];\nif (!frame || !frame.fields || frame.fields.length === 0) return {};\n\nconst tf  = frame.fields.find(f => f.name === 'Time' || f.name === 'time');\nconst pf  = frame.fields.find(f => f.name === 'price');\nconst sf  = frame.fields.find(f => f.name === 'sell_ratio');\nconst of_ = frame.fields.find(f => f.name === 'oi_norm');\nif (!tf || !pf) return {};\n\nconst n      = tf.values.length;\nconst times  = tf.values;\nconst prices = pf.values;\nconst sell   = sf  ? sf.values  : new Array(n).fill(null);\nconst oi     = of_ ? of_.values : new Array(n).fill(null);\n\nconst VAH = 2.90, POC = 2.45;\nconst SHORT_SELL = 72, SHORT_OI = 74;\nconst LONG_SELL  = 63, LONG_OI  = 58;\n\nconst labels = times.map(t => {\n  const d = new Date(typeof t === 'number' ? t : Number(t));\n  return (d.getMonth()+1)+'/'+(d.getDate())+' '+String(d.getHours()).padStart(2,'0')+'h';\n});\n\nconst markAreas  = [];\nconst markPoints = [];\n\nfor (let i = 0; i < n; i++) {\n  const p  = typeof prices[i] === 'number' ? prices[i] : null;\n  const s  = typeof sell[i]   === 'number' ? sell[i]   : 0;\n  const o2 = typeof oi[i]     === 'number' ? oi[i]     : 0;\n  if (p === null) continue;\n  const x1 = labels[i];\n  const x2 = labels[Math.min(i + 1, n - 1)];\n  const isShort = p > VAH && s > SHORT_SELL && o2 > SHORT_OI;\n  const isLong  = p < POC && s < LONG_SELL  && o2 < LONG_OI;\n  if (isShort) {\n    markAreas.push([{ xAxis: x1, itemStyle: { color: 'rgba(226,75,74,0.15)' } }, { xAxis: x2 }]);\n    markPoints.push({ coord: [x1, p], symbol: 'triangle', symbolSize: 12, symbolRotate: 180, itemStyle: { color: '#E24B4A' }, label: { show: true, formatter: '▼S', fontSize: 9, color: '#fff', position: 'inside' } });\n  }\n  if (isLong) {\n    markAreas.push([{ xAxis: x1, itemStyle: { color: 'rgba(99,153,34,0.15)' } }, { xAxis: x2 }]);\n    markPoints.push({ coord: [x1, p], symbol: 'triangle', symbolSize: 12, symbolRotate: 0, itemStyle: { color: '#639922' }, label: { show: true, formatter: '▲L', fontSize: 9, color: '#fff', position: 'inside' } });\n  }\n}\n\nconst priceData = prices.map(v => typeof v === 'number' ? v : null);\nconst interval  = Math.max(1, Math.floor(n / 8));\n\nreturn {\n  tooltip: {\n    trigger: 'axis',\n    formatter: function(params) {\n      const p = Array.isArray(params) ? params[0] : params;\n      const val = p && typeof p.value === 'number' ? '$' + p.value.toFixed(4) : '-';\n      return (p ? p.axisValue : '') + '<br>' + val;\n    }\n  },\n  grid: { left: 65, right: 20, top: 20, bottom: 36 },\n  xAxis: {\n    type: 'category', data: labels,\n    axisLabel: { fontSize: 10, color: tc, rotate: 20, interval: interval },\n    axisLine: { lineStyle: { color: gc } }\n  },\n  yAxis: {\n    type: 'value', scale: true,\n    axisLabel: { formatter: function(v) { return '$' + (v || 0).toFixed(2); }, fontSize: 10, color: tc },\n    splitLine: { lineStyle: { color: gc } }\n  },\n  series: [{\n    name: 'ICP/USDT',\n    type: 'line',\n    data: priceData,\n    lineStyle: { color: '#888780', width: 2 },\n    areaStyle: { color: 'rgba(136,135,128,0.07)' },\n    smooth: false,\n    symbol: 'none',\n    connectNulls: false,\n    markLine: {\n      silent: true,\n      symbol: 'none',\n      data: [\n        { yAxis: VAH, lineStyle: { color: 'rgba(226,75,74,0.65)', type: 'dashed', width: 1.5 }, label: { formatter: 'VAH $' + VAH, position: 'insideStartTop',    fontSize: 10, color: 'rgba(226,75,74,0.9)' } },\n        { yAxis: POC, lineStyle: { color: 'rgba(99,153,34,0.65)',  type: 'dashed', width: 1.5 }, label: { formatter: 'POC $' + POC, position: 'insideStartBottom', fontSize: 10, color: 'rgba(99,153,34,0.9)'  } }\n      ]\n    },\n    markArea:  { silent: true, data: markAreas },\n    markPoint: { data: markPoints }\n  }]\n};"
+      },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT date_trunc('hour', o.ts) AS time, AVG(o.mid_price_usdt) AS price, AVG(CASE WHEN (l.taker_buy_vol_icp + l.taker_sell_vol_icp) > 0 THEN l.taker_sell_vol_icp / (l.taker_buy_vol_icp + l.taker_sell_vol_icp) * 100 ELSE NULL END) AS sell_ratio, AVG(CASE WHEN lm.max_oi > 0 THEN l.open_interest_icp / lm.max_oi * 100 ELSE NULL END) AS oi_norm FROM ob_snapshots o LEFT JOIN liquidation_snapshots l ON date_trunc('hour', l.ts) = date_trunc('hour', o.ts) CROSS JOIN (SELECT MAX(open_interest_icp) AS max_oi FROM liquidation_snapshots WHERE ts >= NOW() - INTERVAL '30 days') lm WHERE $__timeFilter(o.ts) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Sell-Pressure-Ratio & Long OI (norm.)",
+      "type": "volkovlabs-echarts-panel",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 9 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "renderer": "canvas",
+        "script": "const isDark = context.grafana.theme.isDark;\nconst gc = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';\nconst tc = isDark ? '#9E9E9E' : '#777';\n\nconst frame = context.panel.data.series[0];\nif (!frame || !frame.fields || frame.fields.length === 0) return {};\n\nconst tf  = frame.fields.find(f => f.name === 'Time' || f.name === 'time');\nconst sf  = frame.fields.find(f => f.name === 'sell_ratio');\nconst of_ = frame.fields.find(f => f.name === 'oi_norm');\nif (!tf || !sf) return {};\n\nconst n     = tf.values.length;\nconst times = tf.values;\nconst sell  = sf.values.map(v  => typeof v  === 'number' ? v  : null);\nconst oi    = of_ ? of_.values.map(v => typeof v === 'number' ? v : null) : new Array(n).fill(null);\n\nconst SHORT_SELL = 72, LONG_SELL = 63;\n\nconst labels = times.map(t => {\n  const d = new Date(typeof t === 'number' ? t : Number(t));\n  return (d.getMonth()+1)+'/'+(d.getDate())+' '+String(d.getHours()).padStart(2,'0')+'h';\n});\n\nconst markAreas = [];\nfor (let i = 0; i < n; i++) {\n  const s  = typeof sell[i] === 'number' ? sell[i] : null;\n  if (s === null) continue;\n  const x1 = labels[i], x2 = labels[Math.min(i+1, n-1)];\n  if (s > SHORT_SELL) markAreas.push([{ xAxis: x1, itemStyle: { color: 'rgba(226,75,74,0.10)' } }, { xAxis: x2 }]);\n  if (s < LONG_SELL)  markAreas.push([{ xAxis: x1, itemStyle: { color: 'rgba(99,153,34,0.10)'  } }, { xAxis: x2 }]);\n}\n\nconst interval = Math.max(1, Math.floor(n / 8));\n\nconst series = [\n  {\n    name: 'Sell-Pressure-Ratio',\n    type: 'line',\n    data: sell,\n    lineStyle: { color: '#D85A30', width: 2 },\n    areaStyle: { color: 'rgba(216,90,48,0.07)' },\n    smooth: false,\n    symbol: 'none',\n    connectNulls: false,\n    markLine: {\n      silent: true, symbol: 'none',\n      data: [\n        { yAxis: SHORT_SELL, lineStyle: { color: 'rgba(226,75,74,0.5)', type: 'dotted', width: 1 }, label: { formatter: 'SHORT >' + SHORT_SELL + '%', position: 'insideStartTop',    fontSize: 9, color: 'rgba(226,75,74,0.8)' } },\n        { yAxis: LONG_SELL,  lineStyle: { color: 'rgba(99,153,34,0.5)',  type: 'dotted', width: 1 }, label: { formatter: 'LONG <'  + LONG_SELL  + '%', position: 'insideStartBottom', fontSize: 9, color: 'rgba(99,153,34,0.8)'  } }\n      ]\n    },\n    markArea: { silent: true, data: markAreas }\n  }\n];\n\nif (oi.some(v => v !== null)) {\n  series.push({\n    name: 'Long OI (norm.)',\n    type: 'line',\n    data: oi,\n    lineStyle: { color: '#185FA5', width: 1.5, type: 'dashed' },\n    smooth: false,\n    symbol: 'none',\n    connectNulls: false\n  });\n}\n\nreturn {\n  tooltip: {\n    trigger: 'axis',\n    formatter: function(params) {\n      if (!Array.isArray(params)) return '';\n      return params[0].axisValue + '<br>' + params.map(function(p) {\n        const val = typeof p.value === 'number' ? p.value.toFixed(1) + '%' : '-';\n        return p.seriesName + ': ' + val;\n      }).join('<br>');\n    }\n  },\n  legend: { data: ['Sell-Pressure-Ratio', 'Long OI (norm.)'], textStyle: { color: tc, fontSize: 11 }, top: 4 },\n  grid: { left: 55, right: 20, top: 32, bottom: 36 },\n  xAxis: {\n    type: 'category', data: labels,\n    axisLabel: { fontSize: 10, color: tc, rotate: 20, interval: interval },\n    axisLine: { lineStyle: { color: gc } }\n  },\n  yAxis: {\n    type: 'value', min: 30, max: 105,\n    axisLabel: { formatter: function(v) { return v + '%'; }, fontSize: 10, color: tc },\n    splitLine: { lineStyle: { color: gc } }\n  },\n  series: series\n};"
+      },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT date_trunc('hour', o.ts) AS time, AVG(CASE WHEN (l.taker_buy_vol_icp + l.taker_sell_vol_icp) > 0 THEN l.taker_sell_vol_icp / (l.taker_buy_vol_icp + l.taker_sell_vol_icp) * 100 ELSE NULL END) AS sell_ratio, AVG(CASE WHEN lm.max_oi > 0 THEN l.open_interest_icp / lm.max_oi * 100 ELSE NULL END) AS oi_norm FROM ob_snapshots o LEFT JOIN liquidation_snapshots l ON date_trunc('hour', l.ts) = date_trunc('hour', o.ts) CROSS JOIN (SELECT MAX(open_interest_icp) AS max_oi FROM liquidation_snapshots WHERE ts >= NOW() - INTERVAL '30 days') lm WHERE $__timeFilter(o.ts) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

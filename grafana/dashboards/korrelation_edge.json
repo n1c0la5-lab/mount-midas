@@ -1,0 +1,349 @@
+{
+  "uid": "mount-midas-edge",
+  "title": "Mount Midas — Korrelation & Edge",
+  "tags": ["mount-midas", "edge"],
+  "timezone": "browser",
+  "refresh": "15m",
+  "time": { "from": "now-7d", "to": "now" },
+  "schemaVersion": 38,
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "Korrelation r (Sell→Preis)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 3,
+          "displayName": "r (Sell→Preis)",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.4 },
+              { "color": "red", "value": 0.7 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT sell_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 2,
+      "title": "OI/Preis Korrelation",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 3,
+          "displayName": "r (OI→Preis)",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.4 },
+              { "color": "red", "value": 0.7 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT oi_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 3,
+      "title": "Bestes Lag-Fenster",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "Lead-Time (h)",
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT best_lag_hours FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 4,
+      "title": "Konfluenz-Events (30 Tage)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "Score ≥ 4 Events",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "orange", "value": 3 },
+              { "color": "red", "value": 7 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT COUNT(*) FROM signal_log WHERE score >= 4 AND ts >= NOW()-INTERVAL '30 days'), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 5,
+      "title": "Sell-Pressure-Ratio (%) vs. Long OI (ICP absolut)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": { "lineWidth": 2 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Sell-Ratio %" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#D85A30" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Long OI (ICP)" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "unit", "value": "short" },
+              { "id": "decimals", "value": 0 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#185FA5" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 4] } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Long Accounts %" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#639922" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Short Accounts %" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#E24B4A" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "OI Flush Zone" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "decimals", "value": 1 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#00BFFF" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 4] } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 12 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT to_timestamp(floor(extract(epoch FROM o.ts) / 900) * 900) AT TIME ZONE 'UTC' AS time, ROUND(AVG(l.taker_sell_vol_icp / NULLIF(l.taker_buy_vol_icp + l.taker_sell_vol_icp, 0) * 100)::numeric, 1) AS \"Sell-Ratio %\", ROUND(AVG(l.open_interest_icp)::numeric, 0) AS \"Long OI (ICP)\", ROUND(AVG(l.global_ls_ratio / NULLIF(l.global_ls_ratio + 1, 0) * 100)::numeric, 1) AS \"Long Accounts %\", ROUND(AVG(1 / NULLIF(l.global_ls_ratio + 1, 0) * 100)::numeric, 1) AS \"Short Accounts %\", 45.0 AS \"OI Flush Zone\" FROM ob_snapshots o LEFT JOIN liquidation_snapshots l ON to_timestamp(floor(extract(epoch FROM l.ts) / 900) * 900) = to_timestamp(floor(extract(epoch FROM o.ts) / 900) * 900) WHERE o.ts >= NOW() - INTERVAL '7 days' GROUP BY 1 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 6,
+      "title": "Trade-Signal-Zonen: ICP/USDT + Key Levels",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "custom": { "lineWidth": 2, "fillOpacity": 0 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "ICP Preis" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#888780" } },
+              { "id": "custom.fillOpacity", "value": 15 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "VAH 2.90" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#E24B4A" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 3] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "POC 2.40" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#639922" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 3] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "VAL 2.27" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#185FA5" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 3] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Iceberg ⚠" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#FF6B00" } },
+              { "id": "custom.drawStyle", "value": "points" },
+              { "id": "custom.pointSize", "value": 10 },
+              { "id": "custom.lineWidth", "value": 0 },
+              { "id": "custom.fillOpacity", "value": 0 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT to_timestamp(floor(extract(epoch FROM ts) / 300) * 300) AT TIME ZONE 'UTC' AS time, ROUND(AVG(mid_price_usdt)::numeric, 4) AS \"ICP Preis\", 2.90 AS \"VAH 2.90\", 2.40 AS \"POC 2.40\", 2.27 AS \"VAL 2.27\" FROM ob_snapshots WHERE ts >= NOW() - INTERVAL '7 days' GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        },
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, ROUND(AVG(o.mid_price_usdt)::numeric, 4) AS price, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, price, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN price ELSE NULL END AS \"Iceberg ⚠\" FROM with_signal ORDER BY time",
+          "format": "time_series",
+          "refId": "B"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "title": "Iceberg-Erkennung: Ask-Tiefe vs. Spot-Volumen",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": { "lineWidth": 2 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Ask Tiefe (ICP)" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#185FA5" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Spot Vol (ICP)" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#888780" } },
+              { "id": "custom.drawStyle", "value": "bars" },
+              { "id": "custom.fillOpacity", "value": 60 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Iceberg ⚠" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#FF6B00" } },
+              { "id": "custom.drawStyle", "value": "points" },
+              { "id": "custom.pointSize", "value": 10 },
+              { "id": "custom.lineWidth", "value": 0 }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, ask_depth AS \"Ask Tiefe (ICP)\", spot_vol AS \"Spot Vol (ICP)\", CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN ask_depth ELSE NULL END AS \"Iceberg ⚠\" FROM with_signal ORDER BY time",
+        "format": "time_series",
+        "refId": "A"
+      }]
+    }
+
+  ]
+}

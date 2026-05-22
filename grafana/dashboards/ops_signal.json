@@ -1,0 +1,280 @@
+{
+  "uid": "mount-midas-ops",
+  "title": "Mount Midas — Ops & Signal",
+  "tags": ["mount-midas", "ops"],
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "schemaVersion": 38,
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "Signal Score",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "Score / 7",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "red", "value": 4 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT score FROM signal_log ORDER BY ts DESC LIMIT 1), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 2,
+      "title": "Pflicht-Sell heute",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "ICP Pflichtverkauf",
+          "color": { "mode": "fixed", "fixedColor": "orange" }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT SUM(mandatory_sell_icp) FROM np_threshold_daily WHERE ts::date = CURRENT_DATE), 0) AS value",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 3,
+      "title": "Sell-Pressure-Ratio",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "displayName": "Sell-Pressure",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 74 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT ROUND(COALESCE(taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100, 0)::numeric, 1) AS value FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 4,
+      "title": "Aggregator Status",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "Aggregator",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "Still", "index": 0 } } },
+            { "type": "range", "options": { "from": 1, "to": 9999, "result": { "text": "Outflow aktiv", "index": 1 } } }
+          ]
+        }
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COUNT(*) AS value FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW() - INTERVAL '2 hours'",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 5,
+      "title": "Signal Trigger Status",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 4, "w": 13, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "color", "value": { "mode": "thresholds" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [
+                { "color": "green", "value": null },
+                { "color": "red", "value": 1 }
+              ]}},
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "0": { "text": "Still", "index": 0 }, "1": { "text": "Aktiv", "index": 1 } } }
+              ]},
+              { "id": "custom.width", "value": 80 }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Trigger" },   "properties": [{ "id": "custom.width", "value": 210 }] },
+          { "matcher": { "id": "byName", "options": "Schwelle" },  "properties": [{ "id": "custom.width", "value": 110 }, { "id": "custom.align", "value": "center" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }] },
+          { "matcher": { "id": "byName", "options": "Ist-Wert" },  "properties": [{ "id": "custom.width", "value": 90 },  { "id": "custom.align", "value": "right" }] }
+        ]
+      },
+      "options": { "sortBy": [] },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\", ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\" FROM (SELECT '① Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle, COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h' UNION ALL SELECT '② Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '③ Aggregator aktiv', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '④ OB Bid Depth', '< 50.000 ICP', (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1), (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000 UNION ALL SELECT '⑤ L/S Ratio', '> 5,0', (SELECT ROUND(global_ls_ratio::numeric,3) FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1), (SELECT global_ls_ratio FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1) > 5 UNION ALL SELECT '⑥ Perp/Spot Ratio', '> 3,0', (SELECT ROUND(perp_spot_ratio::numeric,3) FROM market_activity ORDER BY ts DESC LIMIT 1), (SELECT perp_spot_ratio FROM market_activity ORDER BY ts DESC LIMIT 1) > 3 UNION ALL SELECT '⑦ Sell-Ratio (NP)', '> 75%', COALESCE(ROUND(AVG(sell_pressure_ratio)*100,1)::numeric,0), COALESCE(AVG(sell_pressure_ratio),0) > 0.75 FROM np_threshold_daily WHERE ts >= NOW()-INTERVAL '24h') sub",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 6,
+      "title": "Wallet-Bewegungen (letzte 6h)",
+      "type": "table",
+      "gridPos": { "x": 13, "y": 4, "w": 11, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ICP" }, "properties": [{ "id": "custom.align", "value": "right" }, { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 90 }] },
+          { "matcher": { "id": "byName", "options": "Hop" }, "properties": [
+            { "id": "custom.displayMode", "value": "color-background" },
+            { "id": "color", "value": { "mode": "thresholds" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [
+              { "color": "dark-red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "yellow", "value": 2 },
+              { "color": "blue", "value": 3 }
+            ]}},
+            { "id": "custom.width", "value": 55 }
+          ]},
+          { "matcher": { "id": "byName", "options": "Zeit" }, "properties": [{ "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "Von" }, "properties": [{ "id": "custom.width", "value": 130 }] },
+          { "matcher": { "id": "byName", "options": "Nach" }, "properties": [{ "id": "custom.width", "value": 130 }] }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "Zeit", "desc": true }] },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT to_char(ts AT TIME ZONE 'Europe/Berlin', 'MM-DD HH24:MI') AS \"Zeit\", LEFT(from_principal, 14) AS \"Von\", LEFT(to_principal, 14) AS \"Nach\", ROUND(amount_icp::numeric, 0) AS \"ICP\", hop_depth AS \"Hop\" FROM wallet_movements WHERE ts >= NOW() - INTERVAL '6 hours' ORDER BY ts DESC LIMIT 100",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 7,
+      "title": "ICP/USDT — Preischart mit Key Levels",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 18, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "color": { "mode": "fixed", "fixedColor": "yellow" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "showLegend": false } },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT to_timestamp(floor(extract(epoch FROM ts) / 300) * 300) AT TIME ZONE 'UTC' AS time, ROUND(AVG(mid_price_usdt)::numeric, 4) AS \"ICP Preis\" FROM ob_snapshots WHERE ts >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 8,
+      "title": "Volume Profile",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 14, "w": 6, "h": 10 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/.*/", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "vertical",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 2 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "VAH" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "POC" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "VAL" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] }
+        ]
+      },
+      "targets": [{
+        "datasource": { "uid": "mount_midas_pg" },
+        "rawSql": "SELECT COALESCE((SELECT vah_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.90) AS \"VAH\", COALESCE((SELECT poc_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.40) AS \"POC\", COALESCE((SELECT val_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.27) AS \"VAL\"",
+        "format": "table",
+        "refId": "A"
+      }]
+    }
+
+  ]
+}

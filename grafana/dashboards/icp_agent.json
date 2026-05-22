@@ -1,0 +1,215 @@
+{
+  "uid": "mount-midas-icp",
+  "title": "Mount Midas — ICP Agent",
+  "tags": ["mount-midas", "icp"],
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "ICP Preis (USDT)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "color": { "mode": "fixed", "fixedColor": "yellow" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, mid_price_usdt AS \"ICP Preis\" FROM ob_snapshots WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Order Book Tiefe ±2% (ICP)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "decimals": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Bid Depth" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Ask Depth" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, bid_depth_icp AS \"Bid Depth\", ask_depth_icp AS \"Ask Depth\" FROM ob_snapshots WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Perp/Spot Volume Ratio",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1.5 },
+              { "color": "red", "value": 3.0 }
+            ]
+          }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, perp_spot_ratio AS \"Ratio\" FROM market_activity WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Long/Short Ratio (Positioning)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "decimals": 3 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Global" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Top Trader" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, global_ls_ratio AS \"Global\", top_ls_ratio AS \"Top Trader\" FROM liquidation_snapshots WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Open Interest (ICP)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 7 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "teal" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, open_interest_icp AS \"OI\" FROM liquidation_snapshots WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Taker Buy/Sell Ratio",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 16, "w": 8, "h": 7 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 3,
+          "color": { "mode": "fixed", "fixedColor": "light-green" },
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1.0 }
+            ]
+          }
+        }
+      },
+      "options": { "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT ts AS time, taker_buy_sell_ratio AS \"Taker Ratio\" FROM liquidation_snapshots WHERE $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "NP Wallet Bewegungen (letzte 7 Tage)",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 16, "w": 8, "h": 7 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "decimals": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Hop 0" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Hop 1" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Hop 2" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT date_trunc('day', ts) AS time, SUM(amount_icp) FILTER (WHERE hop_depth = 0) AS \"Hop 0\", SUM(amount_icp) FILTER (WHERE hop_depth = 1) AS \"Hop 1\", SUM(amount_icp) FILTER (WHERE hop_depth = 2) AS \"Hop 2\" FROM wallet_movements WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Trading Desks — Top Cluster",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 7 },
+      "datasource": { "uid": "mount_midas_pg" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "total_icp" }, "properties": [{ "id": "unit", "value": "none" }, { "id": "decimals", "value": 0 }] },
+          { "matcher": { "id": "byName", "options": "is_trading_desk" }, "properties": [{ "id": "custom.displayMode", "value": "color-background" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "red", "value": 1 }] } }] }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "np_count", "desc": true }] },
+      "targets": [
+        {
+          "datasource": { "uid": "mount_midas_pg" },
+          "rawSql": "SELECT to_principal, np_count, ROUND(total_icp::numeric, 0) AS total_icp, label, is_trading_desk::int, to_char(updated_at, 'YYYY-MM-DD HH24:MI') AS updated FROM destination_clusters ORDER BY np_count DESC, total_icp DESC LIMIT 20",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

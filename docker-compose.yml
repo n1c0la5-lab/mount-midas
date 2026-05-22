@@ -1,0 +1,73 @@
+services:
+  mount-midas-db:
+    image: postgres:16-alpine
+    container_name: mount-midas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - mount_midas_db_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - default
+      - n8n_default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mount-midas-pollers:
+    build:
+      context: ./pollers
+    container_name: mount-midas-pollers
+    restart: unless-stopped
+    environment:
+      DB_HOST: mount-midas-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      DRE_BIN: /usr/local/bin/dre
+    networks:
+      - default
+    depends_on:
+      mount-midas-db:
+        condition: service_healthy
+
+  mount-midas-grafana:
+    image: grafana/grafana:latest
+    container_name: mount-midas-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_SERVER_ROOT_URL: http://192.168.10.137:3000
+      GF_INSTALL_PLUGINS: volkovlabs-echarts-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - mount_midas_grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - default
+    depends_on:
+      mount-midas-db:
+        condition: service_healthy
+
+volumes:
+  mount_midas_db_data:
+  mount_midas_grafana_data:
+
+networks:
+  default:
+    name: mount_midas_default
+  n8n_default:
+    external: true
