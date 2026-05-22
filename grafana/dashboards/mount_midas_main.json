@@ -11,112 +11,8 @@
       },
       "id": 10,
       "panels": [],
-      "title": "Regime \u2014 Marktphase",
+      "title": "Regime — Marktphase",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "dark-green",
-                  "index": 0,
-                  "text": "\u26a1 KOMPRESSION STARK"
-                },
-                "1": {
-                  "color": "green",
-                  "index": 1,
-                  "text": "\ud83d\udfe2 KOMPRESSION"
-                },
-                "2": {
-                  "color": "yellow",
-                  "index": 2,
-                  "text": "\ud83d\udfe1 KOMPRESSION (schwach)"
-                },
-                "3": {
-                  "color": "semi-dark-yellow",
-                  "index": 3,
-                  "text": "\u26a0\ufe0f TRIGGER BULLISH"
-                },
-                "4": {
-                  "color": "gray",
-                  "index": 4,
-                  "text": "\u26aa NEUTRAL"
-                },
-                "5": {
-                  "color": "orange",
-                  "index": 5,
-                  "text": "\ud83d\udfe0 DISTRIBUTION"
-                },
-                "6": {
-                  "color": "red",
-                  "index": 6,
-                  "text": "\ud83d\udd34 DISTRIBUTION STARK"
-                },
-                "7": {
-                  "color": "dark-red",
-                  "index": 7,
-                  "text": "\ud83d\udd34\ud83d\udd34 TOP \u2014 EXIT"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "gray",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 1
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {
-          "valueSize": 24
-        },
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "uid": "mount_midas_pg"
-          },
-          "format": "time_series",
-          "rawSql": "SELECT\n  ts AS time,\n  CASE regime\n    WHEN 'KOMPRESSION_STARK'   THEN 0\n    WHEN 'KOMPRESSION'         THEN 1\n    WHEN 'KOMPRESSION_SCHWACH' THEN 2\n    WHEN 'TRIGGER_BULLISH'     THEN 3\n    WHEN 'NEUTRAL'             THEN 4\n    WHEN 'DISTRIBUTION'        THEN 5\n    WHEN 'DISTRIBUTION_STARK'  THEN 6\n    WHEN 'DISTRIBUTION_TOP'    THEN 7\n    ELSE 4\n  END AS regime_code\nFROM signal_log\nORDER BY ts DESC\nLIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Aktuelles Regime",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -154,8 +50,8 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 4,
-        "x": 6,
+        "w": 6,
+        "x": 0,
         "y": 1
       },
       "id": 12,
@@ -163,6 +59,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
+        "noValue": "—",
         "orientation": "vertical",
         "reduceOptions": {
           "calcs": [
@@ -177,7 +74,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT\n  (SELECT ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ) / NULLIF(SUM(wm.amount_icp),0), 1)::float8\n   FROM wallet_movements wm\n   LEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\n   LEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\n   LEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\n   WHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '30 days') AS \"Flow 30T %\",\n  (SELECT ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ) / NULLIF(SUM(wm.amount_icp),0), 1)::float8\n   FROM wallet_movements wm\n   LEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\n   LEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\n   LEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\n   WHERE wm.hop_depth = 0 AND wm.ts >= CURRENT_DATE) AS \"Flow heute %\"\n",
+          "rawSql": "SELECT\n  COALESCE((\n    SELECT ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n        WHERE EXISTS (\n            SELECT 1 FROM np_wallet_labels wl\n            WHERE wl.account_id = wm.to_principal AND wl.label IN ('exchange','aggregator')\n        ) OR EXISTS (\n            SELECT 1 FROM wallet_movements wm2\n            JOIN np_wallet_labels wl2 ON wl2.account_id = wm2.to_principal\n            WHERE wm2.from_principal = wm.to_principal AND wl2.label IN ('exchange','aggregator')\n        )\n    ) / NULLIF(SUM(wm.amount_icp), 0), 1)::float8\n    FROM wallet_movements wm\n    WHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '30 days'\n  ), 0) AS \"Flow 30T %\",\n  COALESCE((\n    SELECT ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n        WHERE EXISTS (\n            SELECT 1 FROM np_wallet_labels wl\n            WHERE wl.account_id = wm.to_principal AND wl.label IN ('exchange','aggregator')\n        ) OR EXISTS (\n            SELECT 1 FROM wallet_movements wm2\n            JOIN np_wallet_labels wl2 ON wl2.account_id = wm2.to_principal\n            WHERE wm2.from_principal = wm.to_principal AND wl2.label IN ('exchange','aggregator')\n        )\n    ) / NULLIF(SUM(wm.amount_icp), 0), 1)::float8\n    FROM wallet_movements wm\n    WHERE wm.hop_depth = 0 AND wm.ts >= CURRENT_DATE\n  ), 0) AS \"Flow heute %\"",
           "refId": "A"
         }
       ],
@@ -216,8 +113,8 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 4,
-        "x": 10,
+        "w": 3,
+        "x": 6,
         "y": 1
       },
       "id": 13,
@@ -225,6 +122,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
+        "noValue": "—",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -238,7 +136,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT SUM(amount_icp)::float8 AS \"ICP heute\"\nFROM wallet_movements WHERE hop_depth = 0 AND ts >= CURRENT_DATE",
+          "rawSql": "SELECT COALESCE(SUM(amount_icp), 0)::float8 AS \"ICP heute\"\nFROM wallet_movements WHERE hop_depth = 0 AND ts >= CURRENT_DATE",
           "refId": "A"
         }
       ],
@@ -282,10 +180,10 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 14,
-        "y": 1,
+        "h": 5,
         "w": 3,
-        "h": 5
+        "x": 9,
+        "y": 1
       },
       "id": 14,
       "options": {
@@ -347,10 +245,10 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 17,
-        "y": 1,
+        "h": 5,
         "w": 3,
-        "h": 5
+        "x": 12,
+        "y": 1
       },
       "id": 15,
       "options": {
@@ -381,7 +279,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 24
       },
       "id": 100,
       "title": "Ops & Signal",
@@ -403,10 +301,10 @@
         }
       },
       "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 11
+        "h": 5,
+        "w": 3,
+        "x": 18,
+        "y": 1
       },
       "id": 2,
       "options": {
@@ -444,11 +342,10 @@
           "color": {
             "mode": "thresholds"
           },
-          "min": 0,
-          "max": 100,
-          "unit": "percent",
           "decimals": 1,
           "displayName": "Sell-Pressure",
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -469,15 +366,16 @@
                 "value": 74
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
-        "x": 20,
-        "y": 1,
-        "w": 4,
-        "h": 5
+        "h": 5,
+        "w": 3,
+        "x": 15,
+        "y": 1
       },
       "id": 3,
       "options": {
@@ -552,10 +450,10 @@
         }
       },
       "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 12,
-        "y": 11
+        "h": 5,
+        "w": 3,
+        "x": 21,
+        "y": 1
       },
       "id": 4,
       "options": {
@@ -706,9 +604,9 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 13,
+        "w": 12,
         "x": 0,
-        "y": 15
+        "y": 25
       },
       "id": 5,
       "options": {
@@ -720,7 +618,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\", ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\" FROM (SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle, COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h' UNION ALL SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2462 Aggregator aktiv', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2463 OB Bid Depth', '< 50.000 ICP', (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1), (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000 UNION ALL SELECT '\u2464 L/S Ratio', '> 5,0', (SELECT ROUND(global_ls_ratio::numeric,3) FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1), (SELECT global_ls_ratio FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1) > 5 UNION ALL SELECT '\u2465 Perp/Spot Ratio', '> 3,0', (SELECT ROUND(perp_spot_ratio::numeric,3) FROM market_activity ORDER BY ts DESC LIMIT 1), (SELECT perp_spot_ratio FROM market_activity ORDER BY ts DESC LIMIT 1) > 3 UNION ALL SELECT '\u2466 Sell-Ratio (NP)', '> 75%', COALESCE(ROUND(AVG(sell_pressure_ratio)*100,1)::numeric,0), COALESCE(AVG(sell_pressure_ratio),0) > 0.75 FROM np_threshold_daily WHERE ts >= NOW()-INTERVAL '24h') sub",
+          "rawSql": "SELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\", ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\" FROM (SELECT '① Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle, COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h' UNION ALL SELECT '② Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '③ Aggregator aktiv', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '④ OB Bid Depth', '< 50.000 ICP', (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1), (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000 UNION ALL SELECT '⑤ L/S Ratio', '> 5,0', (SELECT ROUND(global_ls_ratio::numeric,3) FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1), (SELECT global_ls_ratio FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1) > 5 UNION ALL SELECT '⑥ Perp/Spot Ratio', '> 3,0', (SELECT ROUND(perp_spot_ratio::numeric,3) FROM market_activity ORDER BY ts DESC LIMIT 1), (SELECT perp_spot_ratio FROM market_activity ORDER BY ts DESC LIMIT 1) > 3 UNION ALL SELECT '⑦ Sell-Ratio (NP)', '> 75%', COALESCE(ROUND(AVG(sell_pressure_ratio)*100,1)::numeric,0), COALESCE(AVG(sell_pressure_ratio),0) > 0.75 FROM np_threshold_daily WHERE ts >= NOW()-INTERVAL '24h') sub",
           "refId": "A"
         }
       ],
@@ -844,9 +742,9 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 11,
-        "x": 13,
-        "y": 15
+        "w": 12,
+        "x": 12,
+        "y": 25
       },
       "id": 6,
       "options": {
@@ -871,148 +769,12 @@
       "type": "table"
     },
     {
-      "datasource": {
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "yellow",
-            "mode": "fixed"
-          },
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
-          },
-          "decimals": 4,
-          "unit": "currencyUSD"
-        }
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 18,
-        "x": 0,
-        "y": 25
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "uid": "mount_midas_pg"
-          },
-          "format": "time_series",
-          "rawSql": "SELECT to_timestamp(floor(extract(epoch FROM ts) / 300) * 300) AT TIME ZONE 'UTC' AS time, ROUND(AVG(mid_price_usdt)::numeric, 4) AS \"ICP Preis\" FROM ob_snapshots WHERE ts >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1",
-          "refId": "A"
-        }
-      ],
-      "title": "ICP/USDT \u2014 Preischart mit Key Levels",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 2,
-          "unit": "currencyUSD"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "VAH"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "orange",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "POC"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "VAL"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 6,
-        "x": 18,
-        "y": 25
-      },
-      "id": 8,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "orientation": "vertical",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "/.*/",
-          "values": false
-        },
-        "textMode": "value_and_name"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT vah_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.90) AS \"VAH\", COALESCE((SELECT poc_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.40) AS \"POC\", COALESCE((SELECT val_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.27) AS \"VAL\"",
-          "refId": "A"
-        }
-      ],
-      "title": "Volume Profile",
-      "type": "stat"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 50
       },
       "id": 200,
       "title": "Korrelation & Edge",
@@ -1028,7 +790,7 @@
             "mode": "thresholds"
           },
           "decimals": 3,
-          "displayName": "r (Sell\u2192Preis)",
+          "displayName": "r (Sell→Preis)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1053,7 +815,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 37
+        "y": 51
       },
       "id": 21,
       "options": {
@@ -1079,7 +841,7 @@
           "refId": "A"
         }
       ],
-      "title": "Korrelation r (Sell\u2192Preis)",
+      "title": "Korrelation r (Sell→Preis)",
       "type": "stat"
     },
     {
@@ -1092,7 +854,7 @@
             "mode": "thresholds"
           },
           "decimals": 3,
-          "displayName": "r (OI\u2192Preis)",
+          "displayName": "r (OI→Preis)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1117,7 +879,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 37
+        "y": 51
       },
       "id": 22,
       "options": {
@@ -1165,7 +927,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 37
+        "y": 51
       },
       "id": 23,
       "options": {
@@ -1204,7 +966,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "displayName": "Score \u2265 4 Events",
+          "displayName": "Score ≥ 4 Events",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1229,7 +991,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 37
+        "y": 51
       },
       "id": 24,
       "options": {
@@ -1273,40 +1035,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Sell-Ratio %"
+              "options": "Sell-Floor 20%"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "#D85A30",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Long OI (ICP)"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "unit",
-                "value": "short"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#185FA5",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               },
@@ -1315,102 +1050,7 @@
                 "value": {
                   "dash": [
                     8,
-                    4
-                  ],
-                  "fill": "dash"
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Long Accounts %"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#639922",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    4,
-                    4
-                  ],
-                  "fill": "dash"
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Short Accounts %"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#E24B4A",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    4,
-                    4
-                  ],
-                  "fill": "dash"
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "OI Flush Zone"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#00BFFF",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    6,
-                    4
+                    6
                   ],
                   "fill": "dash"
                 }
@@ -1421,7 +1061,53 @@
               },
               {
                 "id": "custom.fillOpacity",
-                "value": 12
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Long OI (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 5
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sell-Ratio %"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
               }
             ]
           }
@@ -1431,7 +1117,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 55
       },
       "id": 25,
       "options": {
@@ -1450,7 +1136,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "time_series",
-          "rawSql": "SELECT to_timestamp(floor(extract(epoch FROM o.ts) / 900) * 900) AT TIME ZONE 'UTC' AS time, ROUND(AVG(l.taker_sell_vol_icp / NULLIF(l.taker_buy_vol_icp + l.taker_sell_vol_icp, 0) * 100)::numeric, 1) AS \"Sell-Ratio %\", ROUND(AVG(l.open_interest_icp)::numeric, 0) AS \"Long OI (ICP)\", ROUND(AVG(l.global_ls_ratio / NULLIF(l.global_ls_ratio + 1, 0) * 100)::numeric, 1) AS \"Long Accounts %\", ROUND(AVG(1 / NULLIF(l.global_ls_ratio + 1, 0) * 100)::numeric, 1) AS \"Short Accounts %\", 45.0 AS \"OI Flush Zone\" FROM ob_snapshots o LEFT JOIN liquidation_snapshots l ON to_timestamp(floor(extract(epoch FROM l.ts) / 900) * 900) = to_timestamp(floor(extract(epoch FROM o.ts) / 900) * 900) WHERE o.ts >= NOW() - INTERVAL '7 days' GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT\n  to_timestamp(floor(extract(epoch FROM ts) / 900) * 900) AT TIME ZONE 'UTC' AS time,\n  ROUND(AVG(taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100)::numeric, 1) AS \"Sell-Ratio %\",\n  ROUND(AVG(open_interest_icp)::numeric, 0) AS \"Long OI (ICP)\",\n  20.0 AS \"Sell-Floor 20%\"\nFROM liquidation_snapshots\nWHERE ts >= NOW() - INTERVAL '7 days'\nGROUP BY 1\nORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1580,7 +1266,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Iceberg \u26a0"
+              "options": "Iceberg ⚠"
             },
             "properties": [
               {
@@ -1614,7 +1300,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 65
       },
       "id": 26,
       "options": {
@@ -1641,7 +1327,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "time_series",
-          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, ROUND(AVG(o.mid_price_usdt)::numeric, 4) AS price, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, price, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN price ELSE NULL END AS \"Iceberg \u26a0\" FROM with_signal ORDER BY time",
+          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, ROUND(AVG(o.mid_price_usdt)::numeric, 4) AS price, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, price, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN price ELSE NULL END AS \"Iceberg ⚠\" FROM with_signal ORDER BY time",
           "refId": "B"
         }
       ],
@@ -1706,7 +1392,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Iceberg \u26a0"
+              "options": "Iceberg ⚠"
             },
             "properties": [
               {
@@ -1736,7 +1422,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 75
       },
       "id": 27,
       "options": {
@@ -1755,7 +1441,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "time_series",
-          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, ask_depth AS \"Ask Tiefe (ICP)\", spot_vol AS \"Spot Vol (ICP)\", CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN ask_depth ELSE NULL END AS \"Iceberg \u26a0\" FROM with_signal ORDER BY time",
+          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= NOW() - INTERVAL '24 hours' GROUP BY 1), with_signal AS (SELECT time, ask_depth, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, ask_depth AS \"Ask Tiefe (ICP)\", spot_vol AS \"Spot Vol (ICP)\", CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN ask_depth ELSE NULL END AS \"Iceberg ⚠\" FROM with_signal ORDER BY time",
           "refId": "A"
         }
       ],
@@ -1768,17 +1454,17 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 86
       },
       "id": 400,
-      "title": "EPZ \u2014 Extreme Pressure Zone",
+      "title": "EPZ — Extreme Pressure Zone",
       "type": "row"
     },
     {
       "datasource": {
         "uid": "mount_midas_pg"
       },
-      "description": "Composite Sell-Pressure Score 0\u2013100. Ab 76: Extreme Zone.",
+      "description": "Composite Sell-Pressure Score 0–100. Ab 76: Extreme Zone.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1813,7 +1499,7 @@
         "h": 7,
         "w": 6,
         "x": 0,
-        "y": 73
+        "y": 87
       },
       "id": 401,
       "options": {
@@ -1940,7 +1626,7 @@
         "h": 7,
         "w": 18,
         "x": 6,
-        "y": 73
+        "y": 87
       },
       "id": 402,
       "options": {
@@ -2027,7 +1713,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 94
       },
       "id": 403,
       "options": {
@@ -2058,7 +1744,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 105
       },
       "id": 300,
       "title": "NP-Analyse",
@@ -2177,7 +1863,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 106
       },
       "id": 301,
       "options": {
@@ -2197,7 +1883,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT\n    COALESCE(np.name, SUBSTRING(perf.provider_principal, 1, 20) || '\u2026') AS \"Node Provider\",\n    perf.provider_principal AS principal,\n    COUNT(DISTINCT perf.node_id) AS \"Nodes\",\n    AVG(perf.failure_rate_pct)::float8 AS \"Failure-Rate %\"\nFROM np_performance perf\nLEFT JOIN np_providers np ON np.principal = perf.provider_principal\nWHERE perf.ts >= NOW() - INTERVAL '35 days'\n  AND perf.failure_rate_pct IS NOT NULL\n  AND perf.failure_rate_pct > 0\nGROUP BY perf.provider_principal, np.name\nORDER BY \"Failure-Rate %\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n    COALESCE(np.name, SUBSTRING(perf.provider_principal, 1, 20) || '…') AS \"Node Provider\",\n    perf.provider_principal AS principal,\n    COUNT(DISTINCT perf.node_id) AS \"Nodes\",\n    AVG(perf.failure_rate_pct)::float8 AS \"Failure-Rate %\"\nFROM np_performance perf\nLEFT JOIN np_providers np ON np.principal = perf.provider_principal\nWHERE perf.ts >= NOW() - INTERVAL '35 days'\n  AND perf.failure_rate_pct IS NOT NULL\n  AND perf.failure_rate_pct > 0\nGROUP BY perf.provider_principal, np.name\nORDER BY \"Failure-Rate %\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -2259,7 +1945,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 103
+        "y": 117
       },
       "id": 302,
       "options": {
@@ -2281,7 +1967,7 @@
           "refId": "A"
         }
       ],
-      "title": "NP-Outflow nach Ziel \u2014 monatlich",
+      "title": "NP-Outflow nach Ziel — monatlich",
       "type": "timeseries"
     },
     {
@@ -2329,7 +2015,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 103
+        "y": 117
       },
       "id": 303,
       "options": {
@@ -2351,14 +2037,14 @@
           "refId": "A"
         }
       ],
-      "title": "Exchange-Flow % \u2014 monatlich",
+      "title": "Exchange-Flow % — monatlich",
       "type": "timeseries"
     },
     {
       "datasource": {
         "uid": "mount_midas_pg"
       },
-      "description": "Gr\u00f6\u00dfte Empf\u00e4nger ohne Exchange-Label. ICP Dashboard aufrufen und als Exchange/Aggregator/Staking klassifizieren.",
+      "description": "Größte Empfänger ohne Exchange-Label. ICP Dashboard aufrufen und als Exchange/Aggregator/Staking klassifizieren.",
       "fieldConfig": {
         "defaults": {
           "unit": "none"
@@ -2404,7 +2090,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 103
+        "y": 117
       },
       "id": 304,
       "options": {
@@ -2425,14 +2111,14 @@
           "refId": "A"
         }
       ],
-      "title": "Top Destinations \u2014 unbekannte Empf\u00e4nger (manuell verifizieren)",
+      "title": "Top Destinations — unbekannte Empfänger (manuell verifizieren)",
       "type": "table"
     },
     {
       "datasource": {
         "uid": "mount_midas_pg"
       },
-      "description": "Principals die von \u22655 NPs Transfers empfangen haben. Verifizieren und in exchange_whitelist.json eintragen.",
+      "description": "Principals die von ≥5 NPs Transfers empfangen haben. Verifizieren und in exchange_whitelist.json eintragen.",
       "fieldConfig": {
         "defaults": {
           "unit": "none"
@@ -2456,7 +2142,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 103
+        "y": 117
       },
       "id": 305,
       "options": {
@@ -2473,7 +2159,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT\n  wm.to_principal AS \"Account ID\",\n  COUNT(DISTINCT np.principal) AS \"NPs\",\n  ROUND(SUM(wm.amount_icp)::numeric, 0)::float8 AS \"ICP\",\n  COALESCE(wl.label, '\u2014') AS \"Label\"\nFROM wallet_movements wm\nJOIN np_providers np ON np.principal = wm.from_principal\nLEFT JOIN np_wallet_labels wl ON wl.account_id = wm.to_principal\nWHERE wm.hop_depth = 0\nGROUP BY wm.to_principal, wl.label\nHAVING COUNT(DISTINCT np.principal) >= 3\nORDER BY \"NPs\" DESC, \"ICP\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n  wm.to_principal AS \"Account ID\",\n  COUNT(DISTINCT np.principal) AS \"NPs\",\n  ROUND(SUM(wm.amount_icp)::numeric, 0)::float8 AS \"ICP\",\n  COALESCE(wl.label, '—') AS \"Label\"\nFROM wallet_movements wm\nJOIN np_providers np ON np.principal = wm.from_principal\nLEFT JOIN np_wallet_labels wl ON wl.account_id = wm.to_principal\nWHERE wm.hop_depth = 0\nGROUP BY wm.to_principal, wl.label\nHAVING COUNT(DISTINCT np.principal) >= 3\nORDER BY \"NPs\" DESC, \"ICP\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -2486,86 +2172,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 128
       },
       "id": 600,
       "panels": [],
-      "title": "Marktdaten \u2014 OHLCV & Derivate",
+      "title": "Marktdaten — OHLCV & Derivate",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 70,
-            "lineWidth": 1
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "volume"
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": true,
-                  "viz": false
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 12,
-        "w": 24,
-        "x": 0,
-        "y": 115
-      },
-      "id": 601,
-      "options": {
-        "candleStyle": "candles",
-        "colorStrategy": "open-close",
-        "colors": {
-          "down": "red",
-          "up": "green"
-        },
-        "fields": {
-          "close": "close",
-          "high": "high",
-          "low": "low",
-          "open": "open",
-          "volume": "volume"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "mode": "candles+volume",
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT\n  date::timestamptz AS \"time\",\n  open,\n  high,\n  low,\n  close,\n  volume_icp AS volume\nFROM ohlcv_daily\nWHERE date >= CURRENT_DATE - INTERVAL '500 days'\nORDER BY date",
-          "refId": "A"
-        }
-      ],
-      "title": "ICP/USDT \u2014 Tages-Kerzen",
-      "type": "candlestick"
     },
     {
       "datasource": {
@@ -2610,7 +2222,7 @@
         "h": 8,
         "w": 14,
         "x": 0,
-        "y": 127
+        "y": 141
       },
       "id": 602,
       "options": {
@@ -2632,7 +2244,7 @@
           "refId": "A"
         }
       ],
-      "title": "Funding Rate \u2014 ICPUSDT Perp (st\u00fcndlich)",
+      "title": "Funding Rate — ICPUSDT Perp (stündlich)",
       "type": "timeseries"
     },
     {
@@ -2653,13 +2265,47 @@
           "decimals": 0,
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Flush Zone (P20 30T)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    8,
+                    6
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 10,
         "x": 14,
-        "y": 127
+        "y": 141
       },
       "id": 603,
       "options": {
@@ -2677,12 +2323,184 @@
             "uid": "mount_midas_pg"
           },
           "format": "time_series",
-          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float AS \"Open Interest (ICP)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\nORDER BY ts",
+          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"Open Interest (ICP)\",\n  (SELECT PERCENTILE_CONT(0.20) WITHIN GROUP (ORDER BY oi_icp)\n   FROM open_interest\n   WHERE ts >= NOW() - INTERVAL '30 days')::float8 AS \"Flush Zone (P20 30T)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\nORDER BY ts",
           "refId": "A"
         }
       ],
-      "title": "Open Interest \u2014 ICPUSDT Perp (st\u00fcndlich)",
+      "title": "Open Interest — ICPUSDT Perp (stündlich)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 604,
+      "options": {
+        "getOption": "const s0 = context.panel.data.series[0];  // Tick-Trades\nconst s1 = context.panel.data.series[1];  // NP→Exchange\nconst s2 = context.panel.data.series[2];  // FR Flips\nconst s3 = context.panel.data.series[3];  // Regime-Wechsel\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\n// --- Tick-Trades ---\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\n// --- 200-Tick Kerzen berechnen ---\nconst TICK_SIZE = 200;\nconst candles = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  let high = priceArr[start], low = priceArr[start];\n  let buyVol = 0, sellVol = 0;\n  for (let j = start; j < end; j++) {\n    if (priceArr[j] > high) high = priceArr[j];\n    if (priceArr[j] < low)  low  = priceArr[j];\n    if (bmArr[j]) sellVol += qtyArr[j];\n    else          buyVol  += qtyArr[j];\n  }\n  candles.push({\n    tsMs:       tsMsArr[start],\n    tsEnd:      tsMsArr[end - 1],\n    open:       priceArr[start],\n    high, low,\n    close:      priceArr[end - 1],\n    buyVol, sellVol,\n    tickCount:  end - start,\n    durationMs: tsMsArr[end - 1] - tsMsArr[start],\n    isLive:     (end - start) < TICK_SIZE\n  });\n}\n\n// --- NP→Exchange auf Kerzen mappen ---\nconst npByCandle = new Array(candles.length).fill(0);\nif (s1 && s1.fields.length) {\n  const npTs  = getVals(s1.fields.find(f => f.name === 'ts_ms'));\n  const npAmt = getVals(s1.fields.find(f => f.name === 'amount'));\n\n  for (let i = 0; i < npTs.length; i++) {\n    const t = npTs[i];\n    if (t < candles[0].tsMs) continue;\n    // Binärsuche: letzte Kerze mit tsMs <= t\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    npByCandle[lo] += npAmt[i];\n  }\n}\n\nconst maxNP = Math.max(...npByCandle.filter(v => v > 0), 1);\n\n// --- FR Flip Linien ---\nconst flipLines = [];\nif (s2 && s2.fields.length) {\n  const flipTs   = getVals(s2.fields.find(f => f.name === 'ts_ms'));\n  const flipType = getVals(s2.fields.find(f => f.name === 'flip_type'));\n  for (let i = 0; i < flipTs.length; i++) {\n    const t = flipTs[i];\n    if (!candles.length || t < candles[0].tsMs) continue;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    const isBull = flipType[i] === 'bullish';\n    const fcolor  = isBull ? '#26a69a' : '#ef5350';\n    flipLines.push({\n      name: isBull ? 'FR Flip → Bullish' : 'FR Flip → Bearish',\n      xAxis: lo,\n      lineStyle: { color: fcolor, width: 1, type: 'dotted', opacity: 0.85 },\n      label: {\n        show: true,\n        position: 'insideEndBottom',\n        distance: 4,\n        formatter: isBull ? 'FR↑' : 'FR↓',\n        color: fcolor,\n        fontSize: 9,\n        fontWeight: 'bold'\n      }\n    });\n  }\n}\n\n\n// --- Regime Hintergrund ---\nconst REGIME_COLORS = {\n  'KOMPRESSION_STARK':   'rgba(0,230,118,0.13)',\n  'KOMPRESSION':         'rgba(38,166,154,0.11)',\n  'KOMPRESSION_SCHWACH': 'rgba(139,195,74,0.09)',\n  'TRIGGER_BULLISH':     'rgba(255,235,59,0.13)',\n  'NEUTRAL':             'rgba(0,0,0,0)',\n  'DISTRIBUTION':        'rgba(255,152,0,0.11)',\n  'DISTRIBUTION_STARK':  'rgba(255,87,34,0.13)',\n  'DISTRIBUTION_TOP':    'rgba(239,83,80,0.16)',\n};\nconst REGIME_LABEL_SHORT = {\n  'KOMPRESSION_STARK':   '🟢🟢 Stark',\n  'KOMPRESSION':         '🟢 Komp',\n  'KOMPRESSION_SCHWACH': '🟡 Komp',\n  'TRIGGER_BULLISH':     '⚠️ Trigger',\n  'NEUTRAL':             '',\n  'DISTRIBUTION':        '🔴 Dist',\n  'DISTRIBUTION_STARK':  '🔴🔴 Dist',\n  'DISTRIBUTION_TOP':    '🔴🔴 TOP',\n};\nconst REGIME_LABEL_COLOR = {\n  'KOMPRESSION_STARK':   '#00e676',\n  'KOMPRESSION':         '#4db6ac',\n  'KOMPRESSION_SCHWACH': '#aed581',\n  'TRIGGER_BULLISH':     '#fff176',\n  'NEUTRAL':             'transparent',\n  'DISTRIBUTION':        '#ffb74d',\n  'DISTRIBUTION_STARK':  '#ff7043',\n  'DISTRIBUTION_TOP':    '#ef5350',\n};\nconst regimeAreas = [];\nlet currentRegime = 'NEUTRAL';\nif (s3 && s3.fields.length && candles.length) {\n  const rTs  = getVals(s3.fields.find(f => f.name === 'ts_ms'));\n  const rReg = getVals(s3.fields.find(f => f.name === 'regime'));\n  if (rReg.length > 0) currentRegime = rReg[rReg.length - 1];\n  // Hilfsfunktion: Timestamp → nächster Kerzen-Index\n  const tsToIdx = t => {\n    if (t <= candles[0].tsMs) return 0;\n    if (t >= candles[candles.length-1].tsMs) return candles.length - 1;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid; else hi = mid - 1;\n    }\n    return lo;\n  };\n  for (let i = 0; i < rTs.length; i++) {\n    const startIdx = tsToIdx(rTs[i]);\n    const endIdx   = i + 1 < rTs.length ? tsToIdx(rTs[i + 1]) : candles.length - 1;\n    const color    = REGIME_COLORS[rReg[i]] || 'rgba(0,0,0,0)';\n    if (color === 'rgba(0,0,0,0)') continue;  // NEUTRAL: kein Block\n    const rLabel = REGIME_LABEL_SHORT[rReg[i]] || '';\n    const rColor = REGIME_LABEL_COLOR[rReg[i]] || '#fff';\n    regimeAreas.push([\n      {\n        xAxis: startIdx,\n        itemStyle: { color },\n        label: {\n          show: rLabel !== '' && (endIdx - startIdx) > 2,\n          position: 'inside',\n          rotate: 90,\n          formatter: rLabel,\n          color: rColor,\n          fontSize: 9,\n          fontWeight: 'bold'\n        }\n      },\n      { xAxis: endIdx }\n    ]);\n  }\n}\n\n// --- Labels ---\n\n// Zoom-State als Property auf der Chart-Instanz speichern\n// (überlebt Refreshes, weil die ECharts-Instanz dieselbe bleibt)\nconst chart = context.panel.chart;\nlet zoomStart = 50, zoomEnd = 100;\nif (chart) {\n  // Gespeicherten Zoom lesen (von vorherigem Render)\n  if (typeof chart.__mmZoomStart !== 'undefined') {\n    zoomStart = chart.__mmZoomStart;  // unused\n    zoomEnd   = chart.__mmZoomEnd;\n  }\n  // Listener registrieren der Zoom-Änderungen mitschreibt\n  chart.off('datazoom');\n  chart.on('datazoom', () => {\n    try {\n      const opt = chart.getOption();\n      if (opt && opt.dataZoom && opt.dataZoom[0]) {\n        chart.__mmZoomStart = opt.dataZoom[0].start;\n        chart.__mmZoomEnd   = opt.dataZoom[0].end;\n      }\n    } catch(e) {}\n  });\n}\n\nconst labels = candles.map((c, i) => {\n  const d  = new Date(c.tsMs);\n  const hm = d.toISOString().slice(11, 16);\n  if (i === 0) return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  const prev = new Date(candles[i - 1].tsMs);\n  if (d.getUTCDate() !== prev.getUTCDate())\n    return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  return hm;\n});\n\nconst fmtDur = ms => {\n  const s = Math.round(ms / 1000);\n  if (s < 60)   return s + 's';\n  if (s < 3600) return Math.round(s / 60) + 'min';\n  return (s / 3600).toFixed(1) + 'h';\n};\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\n\nconst BULL = '#26a69a';\nconst BEAR = '#ef5350';\nconst GREY = '#666666';\nconst NP_COLOR = '#ff9800';\n\nconst _curLabel = currentRegime === 'NEUTRAL' ? 'Neutral' : (REGIME_LABEL_SHORT[currentRegime] || currentRegime);\nconst _curColor = REGIME_LABEL_COLOR[currentRegime] || '#aaa';\n\nreturn {\n  backgroundColor: 'transparent',\n  graphic: [{\n    type: 'text',\n    right: 28,\n    top: 14,\n    style: {\n      text: 'Regime: ' + _curLabel,\n      fontSize: 11,\n      fontWeight: 'bold',\n      fill: _curColor\n    }\n  }],\n  animation: false,\n  grid: [\n    { left: 70, right: 20, top: 10, bottom: 80 },\n    { left: 70, right: 20, top: '72%', bottom: 40 }\n  ],\n  xAxis: [\n    {\n      type: 'category', data: labels, gridIndex: 0,\n      axisLine: { lineStyle: { color: '#555' } },\n      axisLabel: { color: '#aaa', fontSize: 10 },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    },\n    {\n      type: 'category', data: labels, gridIndex: 1,\n      axisLabel: { show: false },\n      axisLine: { lineStyle: { color: '#555' } },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    }\n  ],\n  yAxis: [\n    {\n      scale: true, gridIndex: 0,\n      axisLabel: { color: '#aaa', fontSize: 11, formatter: v => v.toFixed(3) },\n      splitLine: { lineStyle: { color: '#2a2a2a' } },\n      axisLine: { show: false }, axisTick: { show: false }\n    },\n    {\n      scale: true, gridIndex: 1,\n      axisLabel: { color: '#aaa', fontSize: 10,\n        formatter: v => (Math.abs(v)/1000).toFixed(0) + 'k' },\n      splitLine: { show: false }, axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 2\n    }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },\n    {\n      type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 25,\n      start: 0, end: 100,\n      textStyle: { color: '#888' }, borderColor: '#444',\n      fillerColor: 'rgba(80,80,80,0.3)',\n      handleStyle: { color: '#777', borderColor: '#555' }\n    }\n  ],\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const cp = params.find(p => p.seriesName === 'ICP 200-Tick');\n      if (!cp) return '';\n      const idx = cp.dataIndex;\n      const c   = candles[idx];\n      if (!c) return '';\n      const chg   = ((c.close - c.open) / c.open * 100).toFixed(2);\n      const arrow = c.close >= c.open ? '\\u25b2' : '\\u25bc';\n      const color = c.close >= c.open ? BULL : BEAR;\n      const net   = c.buyVol - c.sellVol;\n      const nc    = net >= 0 ? BULL : BEAR;\n      const live  = c.isLive ? ' <span style=\"color:#aaa\">\\u25cf live ' + c.tickCount + '/200</span>' : '';\n      const np    = npByCandle[idx] > 0\n        ? '<br/><span style=\"color:' + NP_COLOR + '\">\\u25bc NP\\u2192Exchange: ' + fmtICP(npByCandle[idx]) + ' ICP</span>'\n        : '';\n      return (\n        '<b>' + new Date(c.tsMs).toISOString().slice(0,16).replace('T',' ') + ' UTC</b>' + live + '<br/>' +\n        'O: ' + c.open.toFixed(4) + '  H: ' + c.high.toFixed(4) + '<br/>' +\n        'L: ' + c.low.toFixed(4) + '  C: ' + c.close.toFixed(4) + '<br/>' +\n        '<span style=\"color:' + color + '\">' + arrow + ' ' + chg + '%</span>' +\n        '  <span style=\"color:#aaa\">\\u23f1 ' + fmtDur(c.durationMs) + '</span><br/>' +\n        'Buy: ' + (c.buyVol/1000).toFixed(1) + 'k  Sell: ' + (c.sellVol/1000).toFixed(1) + 'k  ' +\n        '<span style=\"color:' + nc + '\">' + (net>=0?'+':'') + (net/1000).toFixed(1) + 'k</span>' +\n        np\n      );\n    }\n  },\n  series: [\n    {\n      name: 'ICP 200-Tick',\n      type: 'candlestick',\n      xAxisIndex: 0, yAxisIndex: 0,\n      itemStyle: { color: BULL, color0: BEAR, borderColor: BULL, borderColor0: BEAR },\n      data: candles.map(c => c.isLive\n        ? { value: [c.open, c.close, c.low, c.high],\n            itemStyle: { color: GREY, color0: GREY, borderColor: '#999', borderColor0: '#999' } }\n        : [c.open, c.close, c.low, c.high]\n      ),\n      markLine: {\n        silent: true, symbol: 'none', animation: false,\n        data: flipLines\n      },\n      markArea: {\n        silent: true,\n        data: regimeAreas\n      }\n    },\n    {\n      name: 'NP\\u2192Exchange',\n      type: 'scatter',\n      xAxisIndex: 0, yAxisIndex: 0,\n      symbol: 'triangle',\n      symbolRotate: 180,\n      itemStyle: { color: NP_COLOR },\n      label: {\n        show: true,\n        formatter: p => {\n          const amt = npByCandle[p.dataIndex];\n          return amt > 0 ? fmtICP(amt) : '';\n        },\n        position: 'top',\n        color: NP_COLOR,\n        fontSize: 9,\n        fontWeight: 'bold'\n      },\n      data: candles.map((c, i) => {\n        if (npByCandle[i] <= 0) return { value: [i, null], symbolSize: 0 };\n        const size = Math.min(32, Math.max(8, Math.log10(npByCandle[i]) * 7));\n        return { value: [i, c.high * 1.004], symbolSize: size };\n      })\n    },\n    {\n      name: 'Buy Vol',\n      type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol',\n      data: candles.map(c => ({\n        value: c.buyVol,\n        itemStyle: { color: c.isLive ? 'rgba(38,166,154,0.3)' : 'rgba(38,166,154,0.65)' }\n      })),\n      barMaxWidth: 12\n    },\n    {\n      name: 'Sell Vol',\n      type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol',\n      data: candles.map(c => ({\n        value: -c.sellVol,\n        itemStyle: { color: c.isLive ? 'rgba(239,83,80,0.3)' : 'rgba(239,83,80,0.65)' }\n      })),\n      barMaxWidth: 12\n    }\n  ]\n};",
+        "map": "",
+        "renderer": "canvas"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  price::float,\n  quantity_icp::float                      AS qty,\n  (is_buyer_maker::int)                    AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '7 days'\nORDER BY ts ASC, agg_trade_id ASC",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM wm.ts) * 1000)::bigint AS ts_ms,\n  wm.amount_icp::float                        AS amount\nFROM wallet_movements wm\nWHERE wm.ts >= NOW() - INTERVAL '7 days'\n  AND wm.hop_depth = 0\n  AND (\n    EXISTS (\n      SELECT 1 FROM np_wallet_labels\n      WHERE account_id = wm.to_principal\n        AND label IN ('exchange','aggregator')\n    )\n    OR EXISTS (\n      SELECT 1 FROM wallet_movements wm_h\n      JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\n      WHERE wm_h.from_principal = wm.to_principal\n        AND wl_h.label IN ('exchange','aggregator')\n    )\n  )\nORDER BY wm.ts ASC",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  CASE WHEN prev_rate < 0 AND funding_rate >= 0 THEN 'bullish'\n       WHEN prev_rate > 0 AND funding_rate < 0 THEN 'bearish'\n  END AS flip_type\nFROM (\n  SELECT ts, funding_rate,\n    LAG(funding_rate) OVER (ORDER BY ts) AS prev_rate\n  FROM funding_rates\n  WHERE ts >= NOW() - INTERVAL '7 days'\n) sub\nWHERE (prev_rate < 0 AND funding_rate >= 0)\n   OR (prev_rate > 0 AND funding_rate < 0)\nORDER BY ts ASC",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  regime\nFROM (\n  SELECT ts, regime,\n    LAG(regime) OVER (ORDER BY ts) AS prev_regime\n  FROM signal_log\n  WHERE ts >= NOW() - INTERVAL '7 days'\n) sub\nWHERE regime != prev_regime OR prev_regime IS NULL\nORDER BY ts ASC",
+          "refId": "D"
+        }
+      ],
+      "title": "ICP/USDT — 200-Tick + NP→Exchange Overlay",
+      "type": "volkovlabs-echarts-panel"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 163
+      },
+      "id": 800,
+      "panels": [],
+      "title": "History — Regime-Verlauf",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 90,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "DISTRIBUTION": {
+                  "color": "#ff9800",
+                  "index": 5,
+                  "text": "🟠 DISTRIBUTION"
+                },
+                "DISTRIBUTION_STARK": {
+                  "color": "#ff5722",
+                  "index": 6,
+                  "text": "🔴 DISTRIBUTION STARK"
+                },
+                "DISTRIBUTION_TOP": {
+                  "color": "#ef5350",
+                  "index": 7,
+                  "text": "🔴🔴 TOP — EXIT"
+                },
+                "KOMPRESSION": {
+                  "color": "#26a69a",
+                  "index": 1,
+                  "text": "🟢 KOMPRESSION"
+                },
+                "KOMPRESSION_SCHWACH": {
+                  "color": "#8bc34a",
+                  "index": 2,
+                  "text": "🟡 KOMPRESSION (schwach)"
+                },
+                "KOMPRESSION_STARK": {
+                  "color": "#00e676",
+                  "index": 0,
+                  "text": "⚡ KOMPRESSION STARK"
+                },
+                "NEUTRAL": {
+                  "color": "#616161",
+                  "index": 4,
+                  "text": "⚪ NEUTRAL"
+                },
+                "TRIGGER_BULLISH": {
+                  "color": "#ffeb3b",
+                  "index": 3,
+                  "text": "⚠️ TRIGGER BULLISH"
+                }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 164
+      },
+      "id": 801,
+      "options": {
+        "alignValue": "center",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.85,
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  regime AS \"Regime\"\nFROM signal_log\nWHERE $__timeFilter(ts)\nORDER BY ts ASC",
+          "refId": "A"
+        }
+      ],
+      "title": "Regime-History — Marktphasen Verlauf",
+      "type": "state-timeline"
     }
   ],
   "refresh": "1m",
@@ -2721,5 +2539,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 39
+  "version": 80
 }
