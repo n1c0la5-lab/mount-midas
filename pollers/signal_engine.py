@@ -29,7 +29,7 @@ POST_MINT_BEAR_PCT   = 70.0
 POST_MINT_BULL_PCT   = 30.0
 POST_MINT_ALERT_COOLDOWN_H = 6
 SELL_RATIO_WINDOW_H    = 2        # war 24h — reaktiver für Intraday-Signal
-LARGE_SELL_MIN_ICP     = 1_000    # einzelner Taker-Sell-Schwellenwert
+LARGE_SELL_MIN_ICP     = 6_000    # einzelner Taker-Sell-Schwellenwert
 LARGE_SELL_WINDOW_MIN  = 10       # Lookback-Fenster für Large-Sell-Erkennung
 FUNDING_SPIKE_RATE     = 0.0005   # > 0.05% = Retail überleveraged long
 CVD_WINDOW_H           = 1        # netto CVD Berechnungsfenster
