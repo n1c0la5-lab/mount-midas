@@ -30,7 +30,9 @@ POST_MINT_BULL_PCT   = 30.0
 POST_MINT_ALERT_COOLDOWN_H = 6
 SELL_RATIO_WINDOW_H    = 2        # war 24h — reaktiver für Intraday-Signal
 LARGE_SELL_MIN_ICP     = 6_000    # einzelner Taker-Sell-Schwellenwert
-LARGE_SELL_WINDOW_MIN  = 10       # Lookback-Fenster für Large-Sell-Erkennung
+LARGE_SELL_COUNT_MIN   = 3        # Mindestanzahl Cluster-Sells in Zeitfenster
+LARGE_SELL_WINDOW_MIN  = 30       # Lookback-Fenster für Cluster-Erkennung (war 10min)
+ALERT_COOLDOWN_COMBINED_MIN = 30  # Cooldown wenn ⑨+⑩ gleichzeitig aktiv
 FUNDING_SPIKE_RATE     = 0.0005   # > 0.05% = Retail überleveraged long
 CVD_WINDOW_H           = 1        # netto CVD Berechnungsfenster
 CVD_PRICE_WINDOW_H     = 4        # Preisreferenz-Fenster für Divergenz-Check
@@ -196,14 +198,22 @@ async def _eval_triggers(conn) -> tuple[dict, dict]:
             meta["cvd_price_chg_pct"] = None
             meta["cvd_net_1h"] = None
 
-        # ⑩ Large Ask Trade — einzelner Taker-Sell > Schwellenwert in letzten N Minuten
+        # ⑩ Large Sell Cluster: ≥N Taker-Sells > Schwellenwert in 30min UND CVD negativ
+        # Filtert TWAP-Orders heraus — nur echte Cluster (Distribution/Bounce-Selling)
         await cur.execute(f"""
             SELECT COUNT(*) FROM spot_trades
             WHERE is_buyer_maker = true
               AND quantity_icp > {LARGE_SELL_MIN_ICP}
               AND ts >= NOW() - INTERVAL '{LARGE_SELL_WINDOW_MIN} minutes'
         """)
-        t["large_sell"] = ((await cur.fetchone())[0] or 0) > 0
+        sell_count = (await cur.fetchone())[0] or 0
+        cvd_net_1h = meta.get("cvd_net_1h")
+        t["large_sell"] = (
+            sell_count >= LARGE_SELL_COUNT_MIN
+            and cvd_net_1h is not None
+            and cvd_net_1h < 0
+        )
+        meta["large_sell_count"] = sell_count
 
         # ⑪ Funding Rate Spike — Retail überleveraged long → Liquidierungskaskade vorbereitet
         await cur.execute(
@@ -340,12 +350,12 @@ def detect_regime(t: dict, meta: dict, pm: dict, daily: dict) -> str:
     return "NEUTRAL"
 
 
-async def _alert_cooldown_active(conn) -> bool:
-    """True wenn in den letzten ALERT_COOLDOWN_H Stunden bereits ein Score-Alert gesendet wurde."""
+async def _alert_cooldown_active(conn, cooldown_h: float = ALERT_COOLDOWN_H) -> bool:
+    """True wenn in den letzten cooldown_h Stunden bereits ein Score-Alert gesendet wurde."""
     async with conn.cursor() as cur:
         await cur.execute(
             f"SELECT 1 FROM signal_log WHERE alerted = true "
-            f"AND ts >= NOW() - INTERVAL '{ALERT_COOLDOWN_H} hours' LIMIT 1"
+            f"AND ts >= NOW() - INTERVAL '{cooldown_h} hours' LIMIT 1"
         )
         return await cur.fetchone() is not None
 
@@ -541,11 +551,13 @@ async def run() -> None:
                     )
                     await _send_telegram(session, msg)
 
-            # Score-Alert: nur bei Anstieg UND wenn kein Cooldown aktiv
+            # Score-Alert: kürzer Cooldown wenn ⑨+⑩ gleichzeitig (präzises Distribution-Signal)
+            combined_signal = t.get("cvd_div") and t.get("large_sell")
+            cooldown_h = ALERT_COOLDOWN_COMBINED_MIN / 60 if combined_signal else ALERT_COOLDOWN_H
             should_alert = (
                 score >= SCORE_ALERT
                 and score > last
-                and not await _alert_cooldown_active(conn)
+                and not await _alert_cooldown_active(conn, cooldown_h)
             )
             await _write_log(conn, score, t, meta, regime, post_mint_alerted, alerted=should_alert)
 
