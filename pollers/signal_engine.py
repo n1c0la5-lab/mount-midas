@@ -1,12 +1,14 @@
 """
 signal_engine.py — Mount Midas Signal Engine
-Evaluates all 8 triggers every 60s, writes to signal_log, sends Telegram alerts.
+Evaluates all triggers every 60s, writes to signal_log, sends Telegram alerts.
+Nachtruhe 00:00–07:00 Europe/Bucharest — kein Alert in dieser Zeit.
 """
 import asyncio
 import json
 import logging
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import aiohttp
 import psycopg
@@ -23,6 +25,12 @@ _DSN = (
 
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+OLLAMA_URL       = os.environ.get("OLLAMA_HOST", os.environ.get("OLLAMA_URL", ""))
+OLLAMA_MODEL     = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
+
+BUCHAREST_TZ     = ZoneInfo("Europe/Bucharest")
+QUIET_HOUR_START = 0   # 00:00 Uhr
+QUIET_HOUR_END   = 7   # 07:00 Uhr
 SCORE_ALERT          = 2
 SCORE_MAX_ALERT      = 5
 POST_MINT_BEAR_PCT   = 70.0
@@ -428,6 +436,62 @@ async def _write_log(
     await conn.commit()
 
 
+def _is_quiet_hours() -> bool:
+    """Nachtruhe 00:00–07:00 Europe/Bucharest — kein Telegram in dieser Zeit."""
+    hour = datetime.now(BUCHAREST_TZ).hour
+    return QUIET_HOUR_START <= hour < QUIET_HOUR_END
+
+
+async def _llm_comment(
+    session: aiohttp.ClientSession,
+    score: int,
+    t: dict,
+    meta: dict,
+    regime: str,
+) -> str | None:
+    """Generiert 2–3 Satz Analyse via Ollama qwen2.5. None bei Fehler/Timeout."""
+    if not OLLAMA_URL:
+        return None
+
+    active = ", ".join(TRIGGER_LABELS[k] for k, v in t.items() if v) or "keine"
+    rlabel = REGIME_LABELS.get(regime, regime)
+    price  = meta.get("icp_price", "?")
+    sell   = meta.get("sell_ratio_pct", "?")
+    cvd    = meta.get("cvd_net_1h")
+    cvd_str = f"{cvd:+.0f} ICP" if cvd is not None else "n/a"
+    funding = meta.get("funding_rate_pct")
+    funding_str = f"{funding:+.4f}%" if funding is not None else "n/a"
+    sell_count = meta.get("large_sell_count", 0)
+
+    prompt = (
+        f"Du bist ein ICP-Marktanalyst. Antworte in 2–3 präzisen Sätzen auf Deutsch. "
+        f"Kein Markdown, kein Aufzählungszeichen, direkter Ton.\n\n"
+        f"Aktueller Stand:\n"
+        f"Score: {score}/11 | Regime: {rlabel}\n"
+        f"Aktive Trigger: {active}\n"
+        f"ICP-Preis: ${price} | Sell-Ratio: {sell}% | Funding: {funding_str}\n"
+        f"CVD (1h netto): {cvd_str} | Large Sells (30min): {sell_count}\n\n"
+        f"Was bedeutet dieses Signal konkret? Worauf sollte man jetzt achten?"
+    )
+
+    try:
+        async with session.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False,
+                  "options": {"temperature": 0.3, "num_predict": 150}},
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status != 200:
+                log.warning("llm_comment: Ollama HTTP %s", resp.status)
+                return None
+            data = await resp.json()
+            text = (data.get("response") or "").strip()
+            return text if text else None
+    except Exception as e:
+        log.warning("llm_comment: %s", e)
+        return None
+
+
 async def _send_telegram(session: aiohttp.ClientSession, text: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         log.info("signal_engine: Telegram not configured — alert skipped")
@@ -463,24 +527,28 @@ def _epz_block(meta: dict) -> str:
     return f"\n\n🟢 EPZ: {epz}/100 — Normal"
 
 
-def _build_alert(score: int, t: dict, meta: dict, regime: str) -> str:
+def _build_alert(score: int, t: dict, meta: dict, regime: str, llm_text: str | None = None) -> str:
     active_lines = "\n".join(
         f"  🔴 {TRIGGER_LABELS[k]}" for k, v in t.items() if v
     )
-    price  = meta.get("icp_price", "?")
-    sell   = meta.get("sell_ratio_pct", "?")
-    rlabel = REGIME_LABELS.get(regime, regime)
-    header = (
+    price   = meta.get("icp_price", "?")
+    sell    = meta.get("sell_ratio_pct", "?")
+    funding = meta.get("funding_rate_pct")
+    funding_str = f"  |  Funding: <b>{funding:+.4f}%</b>" if funding is not None else ""
+    rlabel  = REGIME_LABELS.get(regime, regime)
+    header  = (
         f"🚨 <b>MOUNT MIDAS MAX ALERT</b> — Score {score}/11"
         if score >= SCORE_MAX_ALERT
         else f"⚠️ <b>MOUNT MIDAS ALERT</b> — Score {score}/11"
     )
+    llm_block = f"\n\n─────────────\n📊 <i>{llm_text}</i>" if llm_text else ""
     return (
         f"{header}\n"
         f"Regime: <b>{rlabel}</b>\n"
-        f"ICP/USDT: <b>${price}</b>  |  Sell-Ratio: <b>{sell}%</b>"
+        f"ICP/USDT: <b>${price}</b>  |  Sell-Ratio: <b>{sell}%</b>{funding_str}"
         f"{_epz_block(meta)}\n\n"
         f"Aktive Trigger:\n{active_lines}"
+        f"{llm_block}"
     )
 
 
@@ -514,9 +582,13 @@ async def run() -> None:
                 meta.get("funding_rate_pct") or 0,
             )
 
+            quiet = _is_quiet_hours()
+            if quiet:
+                log.debug("signal_engine: Nachtruhe aktiv — kein Telegram")
+
             post_mint_alerted = False
             flow = pm["flow_pct"]
-            if flow is not None and await _post_mint_alert_due(conn):
+            if not quiet and flow is not None and await _post_mint_alert_due(conn):
                 if flow > POST_MINT_BEAR_PCT:
                     msg = (
                         f"⚠️ <b>Post-Mint Flow &gt;{POST_MINT_BEAR_PCT:.0f}% zu Exchanges</b>\n"
@@ -535,7 +607,7 @@ async def run() -> None:
                     post_mint_alerted = True
 
             # Regime-Alert bei Wechsel zu KOMPRESSION oder TRIGGER
-            if regime in ("KOMPRESSION_STARK", "KOMPRESSION", "TRIGGER_BULLISH"):
+            if not quiet and regime in ("KOMPRESSION_STARK", "KOMPRESSION", "TRIGGER_BULLISH"):
                 async with conn.cursor() as cur:
                     await cur.execute(
                         "SELECT regime FROM signal_log ORDER BY ts DESC LIMIT 1"
@@ -561,8 +633,9 @@ async def run() -> None:
             )
             await _write_log(conn, score, t, meta, regime, post_mint_alerted, alerted=should_alert)
 
-            if should_alert:
-                await _send_telegram(session, _build_alert(score, t, meta, regime))
+            if should_alert and not quiet:
+                llm_text = await _llm_comment(session, score, t, meta, regime)
+                await _send_telegram(session, _build_alert(score, t, meta, regime, llm_text))
 
 
 if __name__ == "__main__":
