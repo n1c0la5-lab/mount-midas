@@ -1,6 +1,6 @@
 """
 signal_engine.py — Mount Midas Signal Engine
-Evaluates all 7 triggers every 60s, writes to signal_log, sends Telegram alerts.
+Evaluates all 8 triggers every 60s, writes to signal_log, sends Telegram alerts.
 """
 import asyncio
 import json
@@ -28,6 +28,15 @@ SCORE_MAX_ALERT      = 5
 POST_MINT_BEAR_PCT   = 70.0
 POST_MINT_BULL_PCT   = 30.0
 POST_MINT_ALERT_COOLDOWN_H = 6
+SELL_RATIO_WINDOW_H    = 2        # war 24h — reaktiver für Intraday-Signal
+LARGE_SELL_MIN_ICP     = 1_000    # einzelner Taker-Sell-Schwellenwert
+LARGE_SELL_WINDOW_MIN  = 10       # Lookback-Fenster für Large-Sell-Erkennung
+FUNDING_SPIKE_RATE     = 0.0005   # > 0.05% = Retail überleveraged long
+CVD_WINDOW_H           = 1        # netto CVD Berechnungsfenster
+CVD_PRICE_WINDOW_H     = 4        # Preisreferenz-Fenster für Divergenz-Check
+CVD_DIVERGE_MIN_PCT    = 1.0      # minimale Preissteigung für Divergenz-Check
+CVD_NET_THRESHOLD      = -5_000   # negativer CVD-Schwellenwert (ICP)
+ALERT_COOLDOWN_H       = 2        # Mindestabstand zwischen Score-Alerts
 
 # Regime-Schwellenwerte (kalibriert via Backtesting Jan 2024 / Jan 2026)
 REGIME_KOMPRESSION_STARK  = 10.0   # Monatlicher Flow < 10%  → stärkstes Setup
@@ -39,13 +48,17 @@ REGIME_TRIGGER_VOL        = 1_000_000  # Tages-ICP für stilles-Laden-Signal
 REGIME_TRIGGER_FLOW       = 10.0       # Tages-Flow % für stilles-Laden-Signal
 
 TRIGGER_LABELS = {
-    "mint":       "① Minting Event",
-    "wallet_hop": "② Wallet Hop 0",
-    "aggregator": "③ Aggregator aktiv",
-    "ob_thin":    "④ OB Bid dünn",
-    "ls_skew":    "⑤ L/S Skew > 5:1",
-    "perp_spot":  "⑥ Perp/Spot > 3×",
-    "sell_ratio": "⑦ Sell-Ratio > 75%",
+    "mint":          "① Minting Event",
+    "wallet_hop":    "② Wallet Hop 0",
+    "aggregator":    "③ Aggregator aktiv",
+    "ob_thin":       "④ OB Bid dünn",
+    "ls_skew":       "⑤ L/S Skew > 5:1",
+    "perp_spot":     "⑥ Perp/Spot > 3×",
+    "sell_ratio":    "⑦ Sell-Ratio > 75% (2h)",
+    "hop_spike":     "⑧ Hop-2/3-Spike",
+    "cvd_div":       "⑨ CVD-Divergenz",
+    "large_sell":    "⑩ Large Ask Sell",
+    "funding_spike": "⑪ Funding Spike",
 }
 
 REGIME_LABELS = {
@@ -61,7 +74,7 @@ REGIME_LABELS = {
 
 
 async def _eval_triggers(conn) -> tuple[dict, dict]:
-    """Evaluate all 7 triggers. Returns (triggers_bool_dict, meta_dict)."""
+    """Evaluate all 8 triggers. Returns (triggers_bool_dict, meta_dict)."""
     t = {}
     meta = {}
 
@@ -117,16 +130,89 @@ async def _eval_triggers(conn) -> tuple[dict, dict]:
         t["perp_spot"] = perp_spot > 3
         meta["perp_spot"] = perp_spot
 
-        # ⑦ Sell-Ratio > 75% — live from liquidation_snapshots
+        # ⑦ Sell-Ratio > 75% — 2h Fenster (war 24h: zu träge für Intraday)
         await cur.execute(
             "SELECT COALESCE(AVG(taker_sell_vol_icp / "
             "  NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0)), 0) "
-            "FROM liquidation_snapshots WHERE ts >= NOW()-INTERVAL '24h'"
+            f"FROM liquidation_snapshots WHERE ts >= NOW()-INTERVAL '{SELL_RATIO_WINDOW_H}h'"
         )
         row = await cur.fetchone()
         sell_ratio = float(row[0]) if row else 0.0
         t["sell_ratio"] = sell_ratio > 0.75
         meta["sell_ratio_pct"] = round(sell_ratio * 100, 1)
+
+        # ⑧ Hop-2/3-Spike — current 6h volume > 1.5× 3-day rolling avg per 6h window
+        await cur.execute("""
+            WITH cur AS (
+                SELECT COALESCE(SUM(amount_icp), 0) AS vol
+                FROM wallet_movements
+                WHERE hop_depth >= 2 AND ts >= NOW() - INTERVAL '6h'
+            ),
+            base AS (
+                SELECT COALESCE(SUM(amount_icp), 0) / 12.0 AS avg_6h
+                FROM wallet_movements
+                WHERE hop_depth >= 2
+                  AND ts >= NOW() - INTERVAL '3 days'
+                  AND ts < NOW() - INTERVAL '6h'
+            )
+            SELECT cur.vol, base.avg_6h
+            FROM cur, base
+        """)
+        row = await cur.fetchone()
+        hop_vol_6h   = float(row[0]) if row else 0.0
+        hop_avg_6h   = float(row[1]) if row else 0.0
+        t["hop_spike"] = hop_vol_6h > max(hop_avg_6h * 1.5, 50_000)
+        meta["hop_vol_6h"]  = round(hop_vol_6h, 0)
+        meta["hop_avg_6h"]  = round(hop_avg_6h, 0)
+
+        # ⑨ CVD-Divergenz: Preis +X% im Referenzfenster, aber netto CVD negativ
+        await cur.execute(f"""
+            WITH price_bounds AS (
+                SELECT
+                    (SELECT price FROM spot_trades
+                     WHERE ts >= NOW() - INTERVAL '{CVD_PRICE_WINDOW_H} hours'
+                     ORDER BY ts ASC LIMIT 1) AS price_open,
+                    (SELECT price FROM spot_trades ORDER BY ts DESC LIMIT 1) AS price_now
+            ),
+            cvd_recent AS (
+                SELECT COALESCE(SUM(
+                    CASE WHEN NOT is_buyer_maker THEN quantity_icp ELSE -quantity_icp END
+                ), 0) AS net_vol
+                FROM spot_trades
+                WHERE ts >= NOW() - INTERVAL '{CVD_WINDOW_H} hours'
+            )
+            SELECT pb.price_open, pb.price_now, cr.net_vol
+            FROM price_bounds pb, cvd_recent cr
+        """)
+        row = await cur.fetchone()
+        if row and row[0] and row[1] and float(row[0]) > 0:
+            price_change_pct = (float(row[1]) - float(row[0])) / float(row[0]) * 100
+            cvd_net = float(row[2] or 0)
+            t["cvd_div"] = price_change_pct >= CVD_DIVERGE_MIN_PCT and cvd_net < CVD_NET_THRESHOLD
+            meta["cvd_price_chg_pct"] = round(price_change_pct, 2)
+            meta["cvd_net_1h"] = round(cvd_net, 0)
+        else:
+            t["cvd_div"] = False
+            meta["cvd_price_chg_pct"] = None
+            meta["cvd_net_1h"] = None
+
+        # ⑩ Large Ask Trade — einzelner Taker-Sell > Schwellenwert in letzten N Minuten
+        await cur.execute(f"""
+            SELECT COUNT(*) FROM spot_trades
+            WHERE is_buyer_maker = true
+              AND quantity_icp > {LARGE_SELL_MIN_ICP}
+              AND ts >= NOW() - INTERVAL '{LARGE_SELL_WINDOW_MIN} minutes'
+        """)
+        t["large_sell"] = ((await cur.fetchone())[0] or 0) > 0
+
+        # ⑪ Funding Rate Spike — Retail überleveraged long → Liquidierungskaskade vorbereitet
+        await cur.execute(
+            "SELECT funding_rate FROM funding_rates ORDER BY ts DESC LIMIT 1"
+        )
+        row = await cur.fetchone()
+        funding_rate = float(row[0]) if row else 0.0
+        t["funding_spike"] = funding_rate > FUNDING_SPIKE_RATE
+        meta["funding_rate_pct"] = round(funding_rate * 100, 4)
 
         # EPZ — latest composite score + sub-scores
         await cur.execute(
@@ -225,7 +311,7 @@ def detect_regime(t: dict, meta: dict, pm: dict, daily: dict) -> str:
     daily_flow    = daily.get("flow_pct")
     daily_vol     = daily.get("total_icp") or 0.0
     epz           = meta.get("epz_score") or 0.0
-    hop_active    = t.get("wallet_hop") or t.get("mint")
+    hop_active    = t.get("wallet_hop") or t.get("mint") or t.get("hop_spike")
 
     # 1. Tages-TOP-Signal: Flow >85% an einem Tag mit signifikantem Volumen
     if daily_flow is not None and daily_flow > REGIME_DISTRIBUTION_STARK and daily_vol > 100_000:
@@ -254,6 +340,16 @@ def detect_regime(t: dict, meta: dict, pm: dict, daily: dict) -> str:
     return "NEUTRAL"
 
 
+async def _alert_cooldown_active(conn) -> bool:
+    """True wenn in den letzten ALERT_COOLDOWN_H Stunden bereits ein Score-Alert gesendet wurde."""
+    async with conn.cursor() as cur:
+        await cur.execute(
+            f"SELECT 1 FROM signal_log WHERE alerted = true "
+            f"AND ts >= NOW() - INTERVAL '{ALERT_COOLDOWN_H} hours' LIMIT 1"
+        )
+        return await cur.fetchone() is not None
+
+
 async def _post_mint_alert_due(conn) -> bool:
     async with conn.cursor() as cur:
         await cur.execute("""
@@ -274,19 +370,28 @@ async def _last_score(conn) -> int:
 
 async def _write_log(
     conn, score: int, t: dict, meta: dict,
-    regime: str, post_mint_alerted: bool = False,
+    regime: str, post_mint_alerted: bool = False, alerted: bool = False,
 ) -> None:
     details = {
-        "trigger_aggregator":  t.get("aggregator", False),
-        "trigger_ls_skew":     t.get("ls_skew",    False),
-        "trigger_perp_spot":   t.get("perp_spot",  False),
-        "sell_ratio_pct":      meta.get("sell_ratio_pct"),
-        "ls_ratio":            meta.get("ls_ratio"),
-        "perp_spot":           meta.get("perp_spot"),
-        "post_mint_flow_pct":  meta.get("post_mint_flow_pct"),
-        "daily_flow_pct":      meta.get("daily_flow_pct"),
-        "daily_icp_vol":       meta.get("daily_icp_vol"),
-        "post_mint_alerted":   "true" if post_mint_alerted else "false",
+        "trigger_aggregator":    t.get("aggregator",    False),
+        "trigger_ls_skew":       t.get("ls_skew",       False),
+        "trigger_perp_spot":     t.get("perp_spot",     False),
+        "trigger_hop_spike":     t.get("hop_spike",     False),
+        "trigger_cvd_div":       t.get("cvd_div",       False),
+        "trigger_large_sell":    t.get("large_sell",    False),
+        "trigger_funding_spike": t.get("funding_spike", False),
+        "sell_ratio_pct":        meta.get("sell_ratio_pct"),
+        "ls_ratio":              meta.get("ls_ratio"),
+        "perp_spot":             meta.get("perp_spot"),
+        "post_mint_flow_pct":    meta.get("post_mint_flow_pct"),
+        "daily_flow_pct":        meta.get("daily_flow_pct"),
+        "daily_icp_vol":         meta.get("daily_icp_vol"),
+        "post_mint_alerted":     "true" if post_mint_alerted else "false",
+        "hop_vol_6h":            meta.get("hop_vol_6h"),
+        "hop_avg_6h":            meta.get("hop_avg_6h"),
+        "cvd_price_chg_pct":     meta.get("cvd_price_chg_pct"),
+        "cvd_net_1h":            meta.get("cvd_net_1h"),
+        "funding_rate_pct":      meta.get("funding_rate_pct"),
     }
     async with conn.cursor() as cur:
         await cur.execute(
@@ -295,7 +400,7 @@ async def _write_log(
                 ts, score,
                 trigger_mint, trigger_wallet, trigger_ob_thin, trigger_threshold,
                 icp_price_usdt, ob_depth_icp, details, alerted, regime
-            ) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s::jsonb, false, %s)
+            ) VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             """,
             (
                 score,
@@ -306,6 +411,7 @@ async def _write_log(
                 meta.get("icp_price"),
                 meta.get("bid_depth"),
                 json.dumps(details, default=str),
+                alerted,
                 regime,
             ),
         )
@@ -355,9 +461,9 @@ def _build_alert(score: int, t: dict, meta: dict, regime: str) -> str:
     sell   = meta.get("sell_ratio_pct", "?")
     rlabel = REGIME_LABELS.get(regime, regime)
     header = (
-        f"🚨 <b>MOUNT MIDAS MAX ALERT</b> — Score {score}/7"
+        f"🚨 <b>MOUNT MIDAS MAX ALERT</b> — Score {score}/11"
         if score >= SCORE_MAX_ALERT
-        else f"⚠️ <b>MOUNT MIDAS ALERT</b> — Score {score}/7"
+        else f"⚠️ <b>MOUNT MIDAS ALERT</b> — Score {score}/11"
     )
     return (
         f"{header}\n"
@@ -388,11 +494,14 @@ async def run() -> None:
             regime = detect_regime(t, meta, pm, daily)
 
             log.info(
-                "signal_engine: score=%d/7  regime=%s  monthly_flow=%s%%  daily_flow=%s%%  daily_vol=%.0f ICP",
+                "signal_engine: score=%d/11  regime=%s  monthly_flow=%s%%  daily_flow=%s%%  "
+                "daily_vol=%.0f ICP  cvd_net=%.0f  funding=%.4f%%",
                 score, regime,
                 pm["flow_pct"] if pm["flow_pct"] is not None else "n/a",
                 daily["flow_pct"] if daily["flow_pct"] is not None else "n/a",
                 daily["total_icp"],
+                meta.get("cvd_net_1h") or 0,
+                meta.get("funding_rate_pct") or 0,
             )
 
             post_mint_alerted = False
@@ -432,9 +541,15 @@ async def run() -> None:
                     )
                     await _send_telegram(session, msg)
 
-            await _write_log(conn, score, t, meta, regime, post_mint_alerted)
+            # Score-Alert: nur bei Anstieg UND wenn kein Cooldown aktiv
+            should_alert = (
+                score >= SCORE_ALERT
+                and score > last
+                and not await _alert_cooldown_active(conn)
+            )
+            await _write_log(conn, score, t, meta, regime, post_mint_alerted, alerted=should_alert)
 
-            if score >= SCORE_ALERT and score > last:
+            if should_alert:
                 await _send_telegram(session, _build_alert(score, t, meta, regime))
 
 
