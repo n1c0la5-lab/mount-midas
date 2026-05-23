@@ -464,9 +464,10 @@ async def _llm_comment(
     sell_count = meta.get("large_sell_count", 0)
 
     prompt = (
-        f"Du bist ein ICP-Marktanalyst. Antworte in 2–3 präzisen Sätzen auf Deutsch. "
+        f"Du bist ein Krypto-Marktanalyst spezialisiert auf Internet Computer (ICP/USDT), "
+        f"eine Blockchain-Kryptowährung. Antworte in 2–3 präzisen Sätzen auf Deutsch. "
         f"Kein Markdown, kein Aufzählungszeichen, direkter Ton.\n\n"
-        f"Aktueller Stand:\n"
+        f"Aktueller Marktzustand:\n"
         f"Score: {score}/11 | Regime: {rlabel}\n"
         f"Aktive Trigger: {active}\n"
         f"ICP-Preis: ${price} | Sell-Ratio: {sell}% | Funding: {funding_str}\n"
