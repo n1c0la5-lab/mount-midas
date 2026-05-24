@@ -112,6 +112,25 @@ Der post-receive Hook auf der Devbox:
 
 ---
 
+## Grafana — Passwort-Management
+
+**Problem:** Grafana speichert das Passwort im Docker-Volume (`mount_midas_grafana_data`), nicht in der `.env`. Die `.env`-Variable `GF_SECURITY_ADMIN_PASSWORD` gilt **nur beim ersten Container-Start**. Danach lebt das Passwort im Volume — wird es in der UI geändert, driftet es vom `.env`-Wert ab.
+
+**Symptom:** API gibt `401 Invalid username or password` zurück, obwohl `.env` korrekt aussieht.
+
+**Reset (wenn API 401 gibt):**
+
+```bash
+ssh hess@192.168.10.137
+docker exec mount-midas-grafana /usr/share/grafana/bin/grafana cli admin reset-admin-password 'MidasGold2026!'
+```
+
+Das setzt das Passwort direkt im Volume zurück auf den `.env`-Wert.
+
+**Regel:** Passwort in der UI nie ändern. Nur `.env` ist die Quelle der Wahrheit.
+
+---
+
 ## Vor jeder Session: Sync-Check
 
 ```bash
