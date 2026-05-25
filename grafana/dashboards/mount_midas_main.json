@@ -1151,7 +1151,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "OI Delta (ICP)"
+              "options": "OI Delta +"
             },
             "properties": [
               {
@@ -1160,45 +1160,77 @@
               },
               {
                 "id": "custom.fillOpacity",
-                "value": 70
+                "value": 80
               },
               {
                 "id": "custom.lineWidth",
                 "value": 0
               },
               {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "custom.barMaxWidth",
+                "value": 6
+              },
+              {
                 "id": "color",
                 "value": {
-                  "mode": "thresholds"
+                  "fixedColor": "#26a69a",
+                  "mode": "fixed"
                 }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "#ef5350",
-                      "value": null
-                    },
-                    {
-                      "color": "#26a69a",
-                      "value": 0
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.axisSoftMin",
-                "value": null
               },
               {
                 "id": "displayName",
-                "value": "OI Delta"
+                "value": "OI +"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Delta -"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 80
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
               },
               {
                 "id": "custom.axisPlacement",
                 "value": "right"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "custom.barMaxWidth",
+                "value": 6
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#ef5350",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "OI -"
               }
             ]
           }
@@ -1248,8 +1280,25 @@
           "format": "time_series",
           "hide": false,
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS \"time\",\n  (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS \"OI Delta (ICP)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\nORDER BY ts",
+          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n)\nSELECT ts AS \"time\", CASE WHEN d > 0 THEN d ELSE NULL END AS \"OI Delta +\" FROM delta ORDER BY ts",
           "refId": "C",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "hide": false,
+          "rawQuery": true,
+          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n)\nSELECT ts AS \"time\", CASE WHEN d < 0 THEN d ELSE NULL END AS \"OI Delta -\" FROM delta ORDER BY ts",
+          "refId": "D",
           "sql": {
             "columns": [],
             "groupBy": [],
@@ -2664,5 +2713,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 114
+  "version": 115
 }
