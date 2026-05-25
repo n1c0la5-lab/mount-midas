@@ -59,10 +59,11 @@ def main():
     log.info("runner: initial run — wallet_tracker")
     asyncio.run(wallet_tracker.run())
 
-    log.info("runner: initial run — ob_poller + tick_collector + liq_poller + epz_calculator")
+    log.info("runner: initial run — ob_poller + tick_collector + liq_poller + okx_liq_poller + epz_calculator")
     asyncio.run(ob_poller.run())
     asyncio.run(tick_collector.run())
     asyncio.run(liq_poller.run())
+    asyncio.run(okx_liq_poller.run())
     asyncio.run(epz_calculator.run())
 
     log.info("runner: initial run — market_data (funding + OI) + ohlcv backfill")

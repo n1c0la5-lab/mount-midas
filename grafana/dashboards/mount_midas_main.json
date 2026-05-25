@@ -1621,7 +1621,7 @@
                 "uid": "mount_midas_pg"
               },
               "format": "table",
-              "rawSql": "SELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\", ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\" FROM (SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle, COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h' UNION ALL SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2462 Aggregator aktiv', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2463 OB Bid Depth', '< 50.000 ICP', (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1), (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000 UNION ALL SELECT '\u2464 L/S Ratio', '> 5,0', (SELECT ROUND(global_ls_ratio::numeric,3) FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1), (SELECT global_ls_ratio FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1) > 5 UNION ALL SELECT '\u2465 Perp/Spot Ratio', '> 3,0', (SELECT ROUND(perp_spot_ratio::numeric,3) FROM market_activity ORDER BY ts DESC LIMIT 1), (SELECT perp_spot_ratio FROM market_activity ORDER BY ts DESC LIMIT 1) > 3 UNION ALL SELECT '\u2466 Sell-Ratio (NP)', '> 75%', COALESCE(ROUND(AVG(sell_pressure_ratio)*100,1)::numeric,0), COALESCE(AVG(sell_pressure_ratio),0) > 0.75 FROM np_threshold_daily WHERE ts >= NOW()-INTERVAL '24h') sub",
+              "rawSql": "SELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\", ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\" FROM (SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle, COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h' UNION ALL SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2462 Aggregator aktiv', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0 FROM wallet_movements WHERE from_principal LIKE 'bef91947%' AND ts >= NOW()-INTERVAL '6h' UNION ALL SELECT '\u2463 OB Bid Depth', '< 50.000 ICP', (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1), (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000 UNION ALL SELECT '\u2464 L/S Ratio', '> 5,0', (SELECT ROUND(global_ls_ratio::numeric,3) FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1), (SELECT global_ls_ratio FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1) > 5 UNION ALL SELECT '\u2465 Perp/Spot Ratio', '> 3,0', (SELECT ROUND(perp_spot_ratio::numeric,3) FROM market_activity ORDER BY ts DESC LIMIT 1), (SELECT perp_spot_ratio FROM market_activity ORDER BY ts DESC LIMIT 1) > 3 UNION ALL SELECT '\u2466 Sell-Ratio (NP)', '> 75%', COALESCE(ROUND(AVG(sell_pressure_ratio)*100,1)::numeric,0), COALESCE(AVG(sell_pressure_ratio),0) > 0.75 FROM np_threshold_daily WHERE ts >= NOW()-INTERVAL '24h') sub UNION ALL SELECT '\u246b Liq-Sweep (Long>5\u00d7Short)', '> 5\u00d7 (1h)', ROUND(COALESCE((SELECT SUM(quantity_icp) FILTER (WHERE side=''long'') / NULLIF(SUM(quantity_icp) FILTER (WHERE side=''short''),0) FROM liquidation_events WHERE ts >= NOW()-INTERVAL ''1h''),0)::numeric,2), COALESCE((SELECT SUM(quantity_icp) FILTER (WHERE side=''long'') / NULLIF(SUM(quantity_icp) FILTER (WHERE side=''short''),0) FROM liquidation_events WHERE ts >= NOW()-INTERVAL ''1h''),0) > 5) sub",
               "refId": "A"
             }
           ],
@@ -1832,6 +1832,122 @@
           ],
           "title": "EPZ Sub-Scores",
           "type": "bargauge"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "barMaxWidth": 20,
+                "drawStyle": "bars",
+                "fillOpacity": 75,
+                "lineWidth": 0,
+                "showPoints": "never"
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Long Liq"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "#ef5350",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Long Liq (ICP)"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Short Liq"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "#26a69a",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Short Liq (ICP)"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 0
+          },
+          "id": 609,
+          "options": {
+            "legend": {
+              "calcs": [
+                "sum"
+              ],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "mount_midas_pg"
+              },
+              "editorMode": "code",
+              "format": "time_series",
+              "hide": false,
+              "rawQuery": true,
+              "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Long Liq\"\nFROM liquidation_events\nWHERE side = 'long' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+              "refId": "A",
+              "sql": {
+                "columns": [],
+                "groupBy": [],
+                "limit": 50
+              }
+            },
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "mount_midas_pg"
+              },
+              "editorMode": "code",
+              "format": "time_series",
+              "hide": false,
+              "rawQuery": true,
+              "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Short Liq\"\nFROM liquidation_events\nWHERE side = 'short' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+              "refId": "B",
+              "sql": {
+                "columns": [],
+                "groupBy": [],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Liquidation Events \u2014 Long vs. Short (OKX, st\u00fcndlich)",
+          "type": "timeseries"
         }
       ],
       "title": "Ops & Signal",
@@ -2713,5 +2829,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 115
+  "version": 116
 }
