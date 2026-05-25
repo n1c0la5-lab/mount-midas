@@ -917,12 +917,12 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "FR (%)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 15,
+            "fillOpacity": 12,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -936,7 +936,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "showValues": false,
             "spanNulls": false,
             "stacking": {
@@ -952,21 +952,50 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": 0
+                "color": "#ef5350",
+                "value": null
               },
               {
-                "color": "orange",
+                "color": "#26a69a",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 0.05
               }
             ]
           },
           "unit": "percent"
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FR Flip"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 8
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#ff9800",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "displayName",
+                "value": "Flip"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -1002,6 +1031,23 @@
           "format": "time_series",
           "rawSql": "SELECT\n  ts AS \"time\",\n  (funding_rate * 100)::float AS \"Funding Rate (%)\"\nFROM funding_rates\nWHERE $__timeFilter(ts)\nORDER BY ts",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "hide": false,
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  CASE WHEN sign(funding_rate) != LAG(sign(funding_rate)) OVER (ORDER BY ts)\n       THEN 0.0 ELSE NULL END AS \"FR Flip\"\nFROM funding_rates\nWHERE $__timeFilter(ts)\nORDER BY ts",
+          "refId": "B",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
         }
       ],
       "title": "Funding Rate \u2014 ICPUSDT Perp (st\u00fcndlich)",
@@ -1101,6 +1147,60 @@
                 "value": 0
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Delta (ICP)"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 70
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#ef5350",
+                      "value": null
+                    },
+                    {
+                      "color": "#26a69a",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.axisSoftMin",
+                "value": null
+              },
+              {
+                "id": "displayName",
+                "value": "OI Delta"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
           }
         ]
       },
@@ -1138,6 +1238,23 @@
           "format": "time_series",
           "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"Open Interest (ICP)\",\n  (SELECT PERCENTILE_CONT(0.20) WITHIN GROUP (ORDER BY oi_icp)\n   FROM open_interest\n   WHERE ts >= NOW() - INTERVAL '30 days')::float8 AS \"Flush Zone (P20 30T)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\nORDER BY ts",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "hide": false,
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS \"OI Delta (ICP)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\nORDER BY ts",
+          "refId": "C",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
         }
       ],
       "title": "Open Interest \u2014 ICPUSDT Perp (st\u00fcndlich)",
@@ -2547,5 +2664,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 113
+  "version": 114
 }
