@@ -861,6 +861,76 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Long Liq (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#F2495C",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 70
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Short Liq (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#73BF69",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 70
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
           }
         ]
       },
@@ -898,9 +968,27 @@
           "format": "time_series",
           "rawSql": "SELECT\n  to_timestamp(floor(extract(epoch FROM ts) / 900) * 900) AT TIME ZONE 'UTC' AS time,\n  ROUND(AVG(taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100)::numeric, 1) AS \"Sell-Ratio %\",\n  ROUND(AVG(open_interest_icp)::numeric, 0) AS \"Long OI (ICP)\",\n  20.0 AS \"Sell-Floor 20%\"\nFROM liquidation_snapshots\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Long Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'long' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Short Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'short' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+          "refId": "C"
         }
       ],
-      "title": "Sell-Pressure-Ratio (%) vs. Long OI (ICP absolut)",
+      "title": "Sell-Pressure-Ratio (%) + Long OI + Liq Events (ICP)",
       "type": "timeseries"
     },
     {
@@ -1832,122 +1920,6 @@
           ],
           "title": "EPZ Sub-Scores",
           "type": "bargauge"
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "barMaxWidth": 20,
-                "drawStyle": "bars",
-                "fillOpacity": 75,
-                "lineWidth": 0,
-                "showPoints": "never"
-              },
-              "unit": "short"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Long Liq"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "#ef5350",
-                      "mode": "fixed"
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "Long Liq (ICP)"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Short Liq"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "#26a69a",
-                      "mode": "fixed"
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "Short Liq (ICP)"
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 6,
-            "w": 12,
-            "x": 12,
-            "y": 0
-          },
-          "id": 609,
-          "options": {
-            "legend": {
-              "calcs": [
-                "sum"
-              ],
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "none"
-            }
-          },
-          "targets": [
-            {
-              "datasource": {
-                "type": "grafana-postgresql-datasource",
-                "uid": "mount_midas_pg"
-              },
-              "editorMode": "code",
-              "format": "time_series",
-              "hide": false,
-              "rawQuery": true,
-              "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Long Liq\"\nFROM liquidation_events\nWHERE side = 'long' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
-              "refId": "A",
-              "sql": {
-                "columns": [],
-                "groupBy": [],
-                "limit": 50
-              }
-            },
-            {
-              "datasource": {
-                "type": "grafana-postgresql-datasource",
-                "uid": "mount_midas_pg"
-              },
-              "editorMode": "code",
-              "format": "time_series",
-              "hide": false,
-              "rawQuery": true,
-              "rawSql": "SELECT date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Short Liq\"\nFROM liquidation_events\nWHERE side = 'short' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
-              "refId": "B",
-              "sql": {
-                "columns": [],
-                "groupBy": [],
-                "limit": 50
-              }
-            }
-          ],
-          "title": "Liquidation Events — Long vs. Short (OKX, stündlich)",
-          "type": "timeseries"
         }
       ],
       "title": "Ops & Signal",
@@ -2829,5 +2801,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 117
+  "version": 118
 }
