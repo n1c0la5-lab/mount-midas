@@ -42,6 +42,7 @@ LARGE_SELL_COUNT_MIN   = 3        # Mindestanzahl Cluster-Sells in Zeitfenster
 LARGE_SELL_WINDOW_MIN  = 30       # Lookback-Fenster für Cluster-Erkennung (war 10min)
 ALERT_COOLDOWN_COMBINED_MIN = 30  # Cooldown wenn ⑨+⑩ gleichzeitig aktiv
 FUNDING_SPIKE_RATE     = 0.0005   # > 0.05% = Retail überleveraged long
+LIQ_SWEEP_RATIO_MIN    = 5.0      # Long-Liq / Short-Liq > 5x in 1h → Sweep-Signal
 CVD_WINDOW_H           = 1        # netto CVD Berechnungsfenster
 CVD_PRICE_WINDOW_H     = 4        # Preisreferenz-Fenster für Divergenz-Check
 CVD_DIVERGE_MIN_PCT    = 1.0      # minimale Preissteigung für Divergenz-Check
@@ -69,6 +70,7 @@ TRIGGER_LABELS = {
     "cvd_div":       "⑨ CVD-Divergenz",
     "large_sell":    "⑩ Large Ask Sell",
     "funding_spike": "⑪ Funding Spike",
+    "liq_sweep":     "⑫ Liq-Sweep (Long > 5×Short)",
 }
 
 REGIME_LABELS = {
@@ -231,6 +233,23 @@ async def _eval_triggers(conn) -> tuple[dict, dict]:
         funding_rate = float(row[0]) if row else 0.0
         t["funding_spike"] = funding_rate > FUNDING_SPIKE_RATE
         meta["funding_rate_pct"] = round(funding_rate * 100, 4)
+
+        # ⑫ Liquidation Sweep — Long-Liqs > N× Short-Liqs in 1h (OKX Force Orders)
+        await cur.execute("""
+            SELECT
+                COALESCE(SUM(quantity_icp) FILTER (WHERE side = 'long'),  0) AS long_liq,
+                COALESCE(SUM(quantity_icp) FILTER (WHERE side = 'short'), 0) AS short_liq
+            FROM liquidation_events
+            WHERE ts >= NOW() - INTERVAL '1 hour'
+        """)
+        row = await cur.fetchone()
+        long_liq  = float(row[0]) if row else 0.0
+        short_liq = float(row[1]) if row else 0.0
+        liq_ratio = (long_liq / short_liq) if short_liq > 0 else 0.0
+        t["liq_sweep"] = liq_ratio >= LIQ_SWEEP_RATIO_MIN and long_liq > 1_000
+        meta["liq_long_1h"]  = round(long_liq, 0)
+        meta["liq_short_1h"] = round(short_liq, 0)
+        meta["liq_ratio_1h"] = round(liq_ratio, 2)
 
         # EPZ — latest composite score + sub-scores
         await cur.execute(

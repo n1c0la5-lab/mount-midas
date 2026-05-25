@@ -13,6 +13,7 @@ import epz_calculator
 import liq_poller
 import np_poller
 import ob_poller
+import okx_liq_poller
 import signal_engine
 import tick_collector
 import wallet_tracker
@@ -46,6 +47,7 @@ def main():
     schedule.every(60).seconds.do(run_async(ob_poller.run))
     schedule.every(60).seconds.do(run_async(tick_collector.run))
     schedule.every(15).minutes.do(run_async(liq_poller.run))
+    schedule.every(5).minutes.do(run_async(okx_liq_poller.run))
     schedule.every(15).minutes.do(run_async(epz_calculator.run))
     schedule.every(60).seconds.do(run_async(signal_engine.run))
     schedule.every().day.at("03:00").do(run_async(tick_collector.run_cleanup))
@@ -76,6 +78,7 @@ def main():
     log.info("  np_poller:      daily 04:00 UTC")
     log.info("  dre_metrics:    daily 04:30 UTC")
     log.info("  liq_poller:     every 15min")
+    log.info("  okx_liq_poller: every 5min")
     log.info("  epz_calculator: every 15min")
     log.info("  signal_engine:  every 60s")
     log.info("  tick cleanup:   daily 03:00 UTC")
