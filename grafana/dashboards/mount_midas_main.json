@@ -599,7 +599,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  price::float,\n  quantity_icp::float                      AS qty,\n  (is_buyer_maker::int)                    AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '24 hours'\nORDER BY ts ASC, agg_trade_id ASC",
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  price::float,\n  quantity_icp::float                      AS qty,\n  (is_buyer_maker::int)                    AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '7 days'\nORDER BY ts ASC, agg_trade_id ASC",
           "refId": "A"
         },
         {
@@ -2870,5 +2870,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 122
+  "version": 123
 }
