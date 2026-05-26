@@ -42,7 +42,7 @@ def main():
 
     # Schedules
     schedule.every(5).minutes.do(run_async(data_watchdog.run))
-    schedule.every().day.at("00:30").do(run_async(volume_profile_calculator.run))
+    schedule.every(30).minutes.do(run_async(volume_profile_calculator.run))
     schedule.every().day.at("04:00").do(run_async(np_poller.run))
     schedule.every().day.at("04:30").do(run_async(dre_metrics.run))
     schedule.every().day.at("00:05").do(run_async(tick_collector.run_ohlcv))
@@ -80,7 +80,7 @@ def main():
 
     log.info("runner: schedule loop started")
     log.info("  data_watchdog:        every 5min")
-    log.info("  volume_profile:       daily 00:30 UTC")
+    log.info("  volume_profile:       every 30min (from spot_trades)")
     log.info("  ob_poller:      every 60s")
     log.info("  tick_collector: every 60s")
     log.info("  market_data:    every hour (funding rate + OI)")
