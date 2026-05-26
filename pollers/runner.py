@@ -8,6 +8,7 @@ import time
 
 import schedule
 
+import data_watchdog
 import dre_metrics
 import epz_calculator
 import liq_poller
@@ -16,6 +17,7 @@ import ob_poller
 import okx_liq_poller
 import signal_engine
 import tick_collector
+import volume_profile_calculator
 import wallet_tracker
 
 logging.basicConfig(
@@ -39,6 +41,8 @@ def main():
     log.info("runner: starting Mount Midas pollers")
 
     # Schedules
+    schedule.every(5).minutes.do(run_async(data_watchdog.run))
+    schedule.every().day.at("00:30").do(run_async(volume_profile_calculator.run))
     schedule.every().day.at("04:00").do(run_async(np_poller.run))
     schedule.every().day.at("04:30").do(run_async(dre_metrics.run))
     schedule.every().day.at("00:05").do(run_async(tick_collector.run_ohlcv))
@@ -70,7 +74,13 @@ def main():
     asyncio.run(tick_collector.run_market_data())
     asyncio.run(tick_collector.run_ohlcv_backfill())
 
+    log.info("runner: initial run — volume_profile_calculator + data_watchdog")
+    asyncio.run(volume_profile_calculator.run())
+    asyncio.run(data_watchdog.run())
+
     log.info("runner: schedule loop started")
+    log.info("  data_watchdog:        every 5min")
+    log.info("  volume_profile:       daily 00:30 UTC")
     log.info("  ob_poller:      every 60s")
     log.info("  tick_collector: every 60s")
     log.info("  market_data:    every hour (funding rate + OI)")
