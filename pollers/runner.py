@@ -74,9 +74,9 @@ def main():
     asyncio.run(tick_collector.run_market_data())
     asyncio.run(tick_collector.run_ohlcv_backfill())
 
-    log.info("runner: initial run — volume_profile_calculator + data_watchdog")
+    log.info("runner: initial run — volume_profile_calculator")
     asyncio.run(volume_profile_calculator.run())
-    asyncio.run(data_watchdog.run())
+    # data_watchdog: kein Erstlauf — erster Check nach 5min, wenn alle Poller laufen
 
     log.info("runner: schedule loop started")
     log.info("  data_watchdog:        every 5min")
