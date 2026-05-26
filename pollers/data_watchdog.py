@@ -38,13 +38,18 @@ CREATE INDEX IF NOT EXISTS idx_system_health_source_ts ON system_health (source,
 """
 
 # Quelle → (SQL für MAX(ts), Stale-Schwelle in Minuten)
+#
+# Zwei Kategorien:
+#   Poller-Tabellen:  werden bei jedem Lauf beschrieben → enge Schwelle (5–90min)
+#   Event-Tabellen:   werden nur bei Marktereignissen beschrieben → weite Schwelle
+#     liquidation_events: ICP kann stundenlang ohne Liq-Events sein — 8h Schwelle
 SOURCES: dict[str, tuple[str, int]] = {
-    "spot_trades":        ("SELECT MAX(ts) FROM spot_trades",        5),
-    "ob_snapshots":       ("SELECT MAX(ts) FROM ob_snapshots",       5),
-    "open_interest":      ("SELECT MAX(ts) FROM open_interest",      90),
-    "funding_rates":      ("SELECT MAX(ts) FROM funding_rates",      90),
-    "liquidation_events": ("SELECT MAX(ts) FROM liquidation_events", 15),
-    "signal_log":         ("SELECT MAX(ts) FROM signal_log",         5),
+    "spot_trades":        ("SELECT MAX(ts) FROM spot_trades",              5),
+    "ob_snapshots":       ("SELECT MAX(ts) FROM ob_snapshots",             5),
+    "open_interest":      ("SELECT MAX(ts) FROM open_interest",           90),
+    "funding_rates":      ("SELECT MAX(ts) FROM funding_rates",           90),
+    "liquidation_events": ("SELECT MAX(ts) FROM liquidation_events",  8 * 60),
+    "signal_log":         ("SELECT MAX(ts) FROM signal_log",               5),
     "volume_profile":     ("SELECT MAX(calculated_at) FROM volume_profile", 26 * 60),
 }
 
