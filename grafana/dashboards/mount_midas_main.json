@@ -746,7 +746,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 36
       },
       "id": 27,
       "options": {
@@ -996,7 +996,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 44
       },
       "id": 25,
       "options": {
@@ -1193,7 +1193,7 @@
         "h": 8,
         "w": 14,
         "x": 0,
-        "y": 48
+        "y": 54
       },
       "id": 602,
       "options": {
@@ -1505,7 +1505,7 @@
         "h": 8,
         "w": 10,
         "x": 14,
-        "y": 48
+        "y": 54
       },
       "id": 603,
       "options": {
@@ -1701,7 +1701,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 63
+        "y": 69
       },
       "id": 403,
       "options": {
@@ -1742,7 +1742,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 79
       },
       "id": 606,
       "panels": [
@@ -2125,7 +2125,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 80
       },
       "id": 607,
       "title": "Korrelation & Edge",
@@ -2167,7 +2167,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 75
+        "y": 81
       },
       "id": 21,
       "options": {
@@ -2238,7 +2238,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 75
+        "y": 81
       },
       "id": 22,
       "options": {
@@ -2306,7 +2306,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 75
+        "y": 81
       },
       "id": 23,
       "options": {
@@ -2377,7 +2377,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 75
+        "y": 81
       },
       "id": 24,
       "options": {
@@ -2418,7 +2418,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 85
       },
       "id": 608,
       "title": "NP-Analyse",
@@ -2557,7 +2557,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 86
       },
       "id": 301,
       "options": {
@@ -2681,7 +2681,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 90
+        "y": 96
       },
       "id": 302,
       "options": {
@@ -2790,7 +2790,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 90
+        "y": 96
       },
       "id": 304,
       "options": {
@@ -2847,7 +2847,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 94
+        "y": 100
       },
       "id": 305,
       "options": {
@@ -2918,7 +2918,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 104
+        "y": 110
       },
       "id": 303,
       "options": {
@@ -3053,7 +3053,7 @@
         "h": 7,
         "w": 14,
         "x": 0,
-        "y": 56
+        "y": 62
       },
       "id": 610,
       "options": {
@@ -3127,7 +3127,7 @@
         "h": 3,
         "w": 5,
         "x": 14,
-        "y": 56
+        "y": 62
       },
       "id": 611,
       "options": {
@@ -3201,7 +3201,7 @@
         "h": 3,
         "w": 5,
         "x": 19,
-        "y": 56
+        "y": 62
       },
       "id": 612,
       "options": {
@@ -3275,7 +3275,7 @@
         "h": 4,
         "w": 5,
         "x": 14,
-        "y": 59
+        "y": 65
       },
       "id": 613,
       "options": {
@@ -3345,7 +3345,7 @@
         "h": 4,
         "w": 5,
         "x": 19,
-        "y": 59
+        "y": 65
       },
       "id": 614,
       "options": {
@@ -3377,6 +3377,125 @@
       ],
       "title": "Spread HL vs Binance",
       "type": "stat"
+    },
+    {
+      "id": 615,
+      "type": "timeseries",
+      "title": "CVD \u2014 ICP/USDT (Binance Spot + HL Perp)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  time,\n  SUM(delta) OVER (ORDER BY time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)::float AS \"Binance CVD\"\nFROM (\n  SELECT\n    date_trunc('minute', ts) AS time,\n    SUM(CASE WHEN is_buyer_maker = false THEN quantity_icp ELSE 0 END)\n    - SUM(CASE WHEN is_buyer_maker = true  THEN quantity_icp ELSE 0 END) AS delta\n  FROM spot_trades\n  WHERE $__timeFilter(ts)\n    AND source = 'binance'\n  GROUP BY 1\n) sub\nORDER BY time",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  time,\n  SUM(delta) OVER (ORDER BY time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)::float AS \"HL CVD\"\nFROM (\n  SELECT\n    date_trunc('minute', ts) AS time,\n    SUM(CASE WHEN is_buyer_maker = false THEN quantity_icp ELSE 0 END)\n    - SUM(CASE WHEN is_buyer_maker = true  THEN quantity_icp ELSE 0 END) AS delta\n  FROM spot_trades\n  WHERE $__timeFilter(ts)\n    AND source = 'hl'\n  GROUP BY 1\n) sub\nORDER BY time",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "drawStyle": "line",
+            "spanNulls": true,
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Binance CVD"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#29B6F6",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Binance CVD (ICP)"
+              },
+              {
+                "id": "displayName",
+                "value": "Binance CVD (Spot)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HL CVD"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FFE082",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "HL CVD (ICP)"
+              },
+              {
+                "id": "displayName",
+                "value": "HL CVD (Perp)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "transformations": []
     }
   ],
   "preload": false,
