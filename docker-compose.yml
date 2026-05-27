@@ -41,6 +41,24 @@ services:
       mount-midas-db:
         condition: service_healthy
 
+  mount-midas-hl-ws:
+    build:
+      context: ./pollers
+    container_name: mount-midas-hl-ws
+    restart: unless-stopped
+    command: python hl_ws_collector.py
+    environment:
+      DB_HOST: mount-midas-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - default
+    depends_on:
+      mount-midas-db:
+        condition: service_healthy
+
   mount-midas-grafana:
     image: grafana/grafana:latest
     container_name: mount-midas-grafana
