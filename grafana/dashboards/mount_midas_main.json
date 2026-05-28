@@ -29,7 +29,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 605,
+      "id": 620,
       "title": "Regime \u2014 Marktphase",
       "type": "row"
     },
@@ -455,6 +455,220 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "#546E7A",
+                  "text": "\u2014"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "text": "M\u00f6glich (1/3)"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "2": {
+                  "text": "Wahrsch. (2/3)"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "3": {
+                  "text": "AKTIV (3/3)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#546E7A",
+                "value": 0
+              },
+              {
+                "color": "#FFB300",
+                "value": 2
+              },
+              {
+                "color": "#66BB6A",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 2,
+        "x": 15,
+        "y": 1
+      },
+      "id": 618,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND NOT is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Buy TWAP Score\"\nFROM flagged",
+          "refId": "A"
+        }
+      ],
+      "title": "Buy TWAP Score",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "#546E7A",
+                  "text": "\u2014"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "text": "M\u00f6glich (1/3)"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "2": {
+                  "text": "Wahrsch. (2/3)"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "3": {
+                  "text": "AKTIV (3/3)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#546E7A",
+                "value": 0
+              },
+              {
+                "color": "#FFB300",
+                "value": 2
+              },
+              {
+                "color": "#EF5350",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 2,
+        "x": 17,
+        "y": 1
+      },
+      "id": 619,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Sell TWAP Score\"\nFROM flagged",
+          "refId": "A"
+        }
+      ],
+      "title": "Sell TWAP Score",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
       "gridPos": {
         "h": 14,
         "w": 24,
@@ -557,10 +771,6 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
       "gridPos": {
         "h": 10,
         "w": 24,
@@ -582,16 +792,22 @@
         "map": "none",
         "renderer": "canvas",
         "themeEditor": {
+          "config": "{}",
           "format": "auto",
           "height": 400,
-          "language": "json"
+          "language": "json",
+          "name": "default"
         },
         "visualEditor": {
+          "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
+          "dataset": [],
           "format": "auto",
           "height": 400,
-          "language": "json"
+          "language": "json",
+          "series": []
         }
       },
+      "pluginVersion": "7.2.5",
       "targets": [
         {
           "datasource": {
@@ -606,8 +822,6 @@
         }
       ],
       "title": "ICP/USDT \u2014 200-Tick Candles + Volumen + CVD (POC 1000-Tick)",
-      "transformations": [],
-      "transparent": false,
       "type": "volkovlabs-echarts-panel"
     },
     {
@@ -1057,6 +1271,690 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Long Liq (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#ef5350",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Long Liq (ICP)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Short Liq (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#26a69a",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Short Liq (ICP)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Binance OI (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FFB300",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "OI (ICP)"
+              },
+              {
+                "id": "displayName",
+                "value": "Binance OI (ICP)"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 616,
+      "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Long Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'long' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('hour', ts) AS \"time\",\n  -SUM(quantity_icp)::float8 AS \"Short Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'short' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"Binance OI (ICP)\"\nFROM open_interest\nWHERE exchange = 'binance' AND $__timeFilter(ts)\nORDER BY ts",
+          "refId": "C"
+        }
+      ],
+      "title": "Liq Flow \u2014 OKX ICP/USDT Perp",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "id": 621,
+      "title": "Institutional Flow \u2014 TWAP Detection",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 0,
+            "pointSize": 8,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Buy TWAP (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#66BB6A",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sell TWAP (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#EF5350",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 57
+      },
+      "id": 617,
+      "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", quantity_icp::float8 AS \"Buy TWAP (ICP)\"\nFROM scored\nWHERE NOT is_buyer_maker AND seq_score >= 3\nORDER BY ts",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", (-quantity_icp)::float8 AS \"Sell TWAP (ICP)\"\nFROM scored\nWHERE is_buyer_maker AND seq_score >= 3\nORDER BY ts",
+          "refId": "B"
+        }
+      ],
+      "title": "TWAP Activity \u2014 Institutional Flow (Spot)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Flush Zone (P20 30T)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    8,
+                    6
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Delta +"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 80
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#26a69a",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "OI +"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Delta -"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 80
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#ef5350",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "OI -"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI HL (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FFB300",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    8,
+                    6
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "displayName",
+                "value": "OI Hyperliquid (ICP)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Binance (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#42A5F5",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "OI Binance (ICP)"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 57
+      },
+      "id": 603,
+      "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"OI Binance (ICP)\",\n  (SELECT PERCENTILE_CONT(0.20) WITHIN GROUP (ORDER BY oi_icp)\n   FROM open_interest\n   WHERE ts >= NOW() - INTERVAL '30 days'\n     AND exchange = 'binance')::float8 AS \"Flush Zone (P20 30T)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\n  AND exchange = 'binance'\nORDER BY ts",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n    AND exchange = 'binance'\n)\nSELECT ts AS \"time\", CASE WHEN d > 0 THEN d ELSE NULL END AS \"OI Delta +\" FROM delta ORDER BY ts",
+          "refId": "C",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n    AND exchange = 'binance'\n)\nSELECT ts AS \"time\", CASE WHEN d < 0 THEN d ELSE NULL END AS \"OI Delta -\" FROM delta ORDER BY ts",
+          "refId": "D",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"OI HL (ICP)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\n  AND exchange = 'hl'\nORDER BY ts",
+          "refId": "E",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Open Interest \u2014 ICPUSDT Perp (Binance + HL)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
           "custom": {
@@ -1099,7 +1997,7 @@
             "steps": [
               {
                 "color": "#ef5350",
-                "value": null
+                "value": 0
               },
               {
                 "color": "#26a69a",
@@ -1231,7 +2129,6 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "hide": false,
           "rawQuery": true,
           "rawSql": "SELECT\n  ts AS \"time\",\n  CASE WHEN sign(funding_rate) != LAG(sign(funding_rate)) OVER (ORDER BY ts)\n       THEN 0.0 ELSE NULL END AS \"FR Flip\"\nFROM funding_rates\nWHERE $__timeFilter(ts)\n  AND exchange = 'binance'\nORDER BY ts",
           "refId": "B",
@@ -1248,7 +2145,6 @@
           },
           "editorMode": "code",
           "format": "time_series",
-          "hide": false,
           "rawQuery": true,
           "rawSql": "SELECT\n  ts AS \"time\",\n  (funding_rate * 100)::float AS \"HL FR (%)\"\nFROM funding_rates\nWHERE $__timeFilter(ts)\n  AND exchange = 'hl'\nORDER BY ts",
           "refId": "C",
@@ -1270,260 +2166,58 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "blue",
-            "mode": "fixed"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 0,
+          "decimals": 4,
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#42A5F5",
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "#26a69a",
+                "value": -0.02
+              },
+              {
+                "color": "#FFB300",
+                "value": 0.02
+              },
+              {
+                "color": "#ef5350",
+                "value": 0.05
               }
             ]
           },
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Flush Zone (P20 30T)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    8,
-                    6
-                  ],
-                  "fill": "dash"
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "OI Delta +"
-            },
-            "properties": [
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 80
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 0
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.showPoints",
-                "value": "never"
-              },
-              {
-                "id": "custom.barMaxWidth",
-                "value": 6
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#26a69a",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "OI +"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "OI Delta -"
-            },
-            "properties": [
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 80
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 0
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.showPoints",
-                "value": "never"
-              },
-              {
-                "id": "custom.barMaxWidth",
-                "value": 6
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#ef5350",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "OI -"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "OI HL (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FFB300",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 2
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "dash": [
-                    8,
-                    6
-                  ],
-                  "fill": "dash"
-                }
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              },
-              {
-                "id": "displayName",
-                "value": "OI Hyperliquid (ICP)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "OI Binance (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#42A5F5",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "OI Binance (ICP)"
-              }
-            ]
-          }
-        ]
+          "unit": "percent"
+        }
       },
       "gridPos": {
-        "h": 8,
-        "w": 10,
+        "h": 3,
+        "w": 5,
         "x": 14,
         "y": 65
       },
-      "id": 603,
+      "id": 611,
       "options": {
-        "annotations": {
-          "clustering": -1,
-          "multiLane": false
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
         },
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
       },
       "pluginVersion": "13.0.1+security-01",
       "targets": [
@@ -1532,64 +2226,245 @@
             "type": "grafana-postgresql-datasource",
             "uid": "mount_midas_pg"
           },
+          "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"OI Binance (ICP)\",\n  (SELECT PERCENTILE_CONT(0.20) WITHIN GROUP (ORDER BY oi_icp)\n   FROM open_interest\n   WHERE ts >= NOW() - INTERVAL '30 days'\n     AND exchange = 'binance')::float8 AS \"Flush Zone (P20 30T)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\n  AND exchange = 'binance'\nORDER BY ts",
+          "rawQuery": true,
+          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'hl'\nORDER BY ts DESC LIMIT 1",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "hide": false,
-          "rawQuery": true,
-          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n    AND exchange = 'binance'\n)\nSELECT ts AS \"time\", CASE WHEN d > 0 THEN d ELSE NULL END AS \"OI Delta +\" FROM delta ORDER BY ts",
-          "refId": "C",
-          "sql": {
-            "columns": [],
-            "groupBy": [],
-            "limit": 50
-          }
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "hide": false,
-          "rawQuery": true,
-          "rawSql": "WITH delta AS (\n  SELECT ts,\n    (oi_icp - LAG(oi_icp) OVER (ORDER BY ts))::float8 AS d\n  FROM open_interest\n  WHERE $__timeFilter(ts)\n    AND exchange = 'binance'\n)\nSELECT ts AS \"time\", CASE WHEN d < 0 THEN d ELSE NULL END AS \"OI Delta -\" FROM delta ORDER BY ts",
-          "refId": "D",
-          "sql": {
-            "columns": [],
-            "groupBy": [],
-            "limit": 50
-          }
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "hide": false,
-          "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"OI HL (ICP)\"\nFROM open_interest\nWHERE $__timeFilter(ts)\n  AND exchange = 'hl'\nORDER BY ts",
-          "refId": "E",
-          "sql": {
-            "columns": [],
-            "groupBy": [],
-            "limit": 50
-          }
         }
       ],
-      "title": "Open Interest \u2014 ICPUSDT Perp (Binance + HL)",
-      "type": "timeseries"
+      "title": "Predicted: HL",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 4,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#42A5F5",
+                "value": 0
+              },
+              {
+                "color": "#26a69a",
+                "value": -0.02
+              },
+              {
+                "color": "#FFB300",
+                "value": 0.02
+              },
+              {
+                "color": "#ef5350",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 19,
+        "y": 65
+      },
+      "id": 612,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'binance'\nORDER BY ts DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Predicted: Binance",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 4,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#42A5F5",
+                "value": 0
+              },
+              {
+                "color": "#26a69a",
+                "value": -0.02
+              },
+              {
+                "color": "#FFB300",
+                "value": 0.02
+              },
+              {
+                "color": "#ef5350",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 68
+      },
+      "id": 613,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'bybit'\nORDER BY ts DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Predicted: Bybit",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 4,
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#26a69a",
+                "value": 0
+              },
+              {
+                "color": "#FFB300",
+                "value": 0.03
+              },
+              {
+                "color": "#ef5350",
+                "value": 0.06
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 68
+      },
+      "id": 614,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT NOW() AS \"time\",\n  ABS(\n    MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate END) -\n    MAX(CASE WHEN exchange = 'binance' THEN predicted_rate END)\n  ) * 100 AS \"HL/Bin Spread\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND ts >= NOW() - INTERVAL '10 minutes'",
+          "refId": "A"
+        }
+      ],
+      "title": "Spread HL vs Binance",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -1698,10 +2573,10 @@
         ]
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 80
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 72
       },
       "id": 403,
       "options": {
@@ -1737,387 +2612,540 @@
       "type": "timeseries"
     },
     {
-      "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 90
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
       },
-      "id": 606,
-      "panels": [
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "Predicted FR (%)",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "decimals": 5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "#FFB300",
+                "value": 0.02
+              },
+              {
+                "color": "#ef5350",
+                "value": 0.05
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HL"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FFB300",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Binance"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#F4511E",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bybit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#7E57C2",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 14,
+        "x": 0,
+        "y": 73
+      },
+      "id": 610,
+      "options": {
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
             "uid": "mount_midas_pg"
           },
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "align": "left",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "footer": {
-                  "reducers": []
-                },
-                "inspect": false
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": 0
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              }
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS \"time\",\n  MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate * 100 END) AS \"HL\",\n  MAX(CASE WHEN exchange = 'binance' THEN predicted_rate * 100 END) AS \"Binance\",\n  MAX(CASE WHEN exchange = 'bybit'   THEN predicted_rate * 100 END) AS \"Bybit\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND $__timeFilter(ts)\nGROUP BY ts\nORDER BY ts",
+          "refId": "A"
+        }
+      ],
+      "title": "Predicted Funding \u2014 Cross-Exchange Vergleich (ICP)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 80
+      },
+      "id": 622,
+      "title": "Ops & Signal",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
             },
-            "overrides": [
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Status"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "thresholds"
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
                     }
-                  },
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
                   {
-                    "id": "thresholds",
-                    "value": {
-                      "mode": "absolute",
-                      "steps": [
-                        {
-                          "color": "green",
-                          "value": 0
-                        },
-                        {
-                          "color": "red",
-                          "value": 1
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "options": {
-                          "0": {
-                            "index": 0,
-                            "text": "Still"
-                          },
-                          "1": {
-                            "index": 1,
-                            "text": "Aktiv"
-                          }
-                        },
-                        "type": "value"
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "Still"
+                      },
+                      "1": {
+                        "index": 1,
+                        "text": "Aktiv"
                       }
-                    ]
-                  },
-                  {
-                    "id": "custom.width",
-                    "value": 80
+                    },
+                    "type": "value"
                   }
                 ]
               },
               {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Trigger"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 210
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Schwelle"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 110
-                  },
-                  {
-                    "id": "custom.align",
-                    "value": "center"
-                  },
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "text",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Ist-Wert"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 90
-                  },
-                  {
-                    "id": "custom.align",
-                    "value": "right"
-                  }
-                ]
+                "id": "custom.width",
+                "value": 80
               }
             ]
           },
-          "gridPos": {
-            "h": 10,
-            "w": 8,
-            "x": 0,
-            "y": 67
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trigger"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
           },
-          "id": 5,
-          "options": {
-            "cellHeight": "sm",
-            "showHeader": true,
-            "sortBy": []
-          },
-          "pluginVersion": "13.0.1+security-01",
-          "targets": [
-            {
-              "datasource": {
-                "type": "grafana-postgresql-datasource",
-                "uid": "mount_midas_pg"
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schwelle"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
               },
-              "format": "table",
-              "rawSql": "WITH sl AS (\n  SELECT trigger_mint, trigger_wallet, trigger_ob_thin, trigger_threshold, details\n  FROM signal_log ORDER BY ts DESC LIMIT 1\n)\nSELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\",\n  ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\"\nFROM (\n  SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle,\n    COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h'\n  UNION ALL\n  SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h'\n  UNION ALL\n  SELECT '\u2462 Aggregator aktiv', '> 0 (6h)',\n    ((sl.details->>'trigger_aggregator')::boolean)::int::numeric,\n    (sl.details->>'trigger_aggregator')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2463 OB Bid Depth', '< 50.000 ICP',\n    (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1),\n    (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000\n  UNION ALL\n  SELECT '\u2464 L/S Ratio', '> 5,0',\n    ROUND((sl.details->>'ls_ratio')::numeric, 3),\n    (sl.details->>'ls_ratio')::numeric > 5\n  FROM sl\n  UNION ALL\n  SELECT '\u2465 Perp/Spot Ratio', '> 3,0',\n    ROUND((sl.details->>'perp_spot')::numeric, 3),\n    (sl.details->>'perp_spot')::numeric > 3\n  FROM sl\n  UNION ALL\n  SELECT '\u2466 Sell-Ratio > 75%', '> 75%',\n    ROUND((sl.details->>'sell_ratio_pct')::numeric, 1),\n    sl.trigger_threshold\n  FROM sl\n  UNION ALL\n  SELECT '\u2467 Hop-2/3-Spike', 'Spike > 1.5\u00d7',\n    ((sl.details->>'trigger_hop_spike')::boolean)::int::numeric,\n    (sl.details->>'trigger_hop_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2468 CVD-Divergenz', 'Preis\u2191/CVD\u2193',\n    ROUND((sl.details->>'cvd_price_chg_pct')::numeric, 2),\n    (sl.details->>'trigger_cvd_div')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2469 Large Ask Sell', '\u22653\u00d7>6k/30min',\n    ((sl.details->>'trigger_large_sell')::boolean)::int::numeric,\n    (sl.details->>'trigger_large_sell')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246a Funding Spike', '> 0.0005',\n    ROUND(ABS((sl.details->>'funding_rate_pct')::numeric), 4),\n    (sl.details->>'trigger_funding_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246b Liq-Sweep (Long>5\u00d7Short)', '> 5\u00d7 (1h)',\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    )::numeric,\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    ) > 5\n) sub\nORDER BY 1",
-              "refId": "A"
-            }
-          ],
-          "title": "Signal Trigger Status",
-          "type": "table"
+              {
+                "id": "custom.align",
+                "value": "center"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "text",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ist-Wert"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 0,
+        "y": 81
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "WITH sl AS (\n  SELECT trigger_mint, trigger_wallet, trigger_ob_thin, trigger_threshold, details\n  FROM signal_log ORDER BY ts DESC LIMIT 1\n)\nSELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\",\n  ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\"\nFROM (\n  SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle,\n    COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h'\n  UNION ALL\n  SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h'\n  UNION ALL\n  SELECT '\u2462 Aggregator aktiv', '> 0 (6h)',\n    ((sl.details->>'trigger_aggregator')::boolean)::int::numeric,\n    (sl.details->>'trigger_aggregator')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2463 OB Bid Depth', '< 50.000 ICP',\n    (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1),\n    (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000\n  UNION ALL\n  SELECT '\u2464 L/S Ratio', '> 5,0',\n    ROUND((sl.details->>'ls_ratio')::numeric, 3),\n    (sl.details->>'ls_ratio')::numeric > 5\n  FROM sl\n  UNION ALL\n  SELECT '\u2465 Perp/Spot Ratio', '> 3,0',\n    ROUND((sl.details->>'perp_spot')::numeric, 3),\n    (sl.details->>'perp_spot')::numeric > 3\n  FROM sl\n  UNION ALL\n  SELECT '\u2466 Sell-Ratio > 75%', '> 75%',\n    ROUND((sl.details->>'sell_ratio_pct')::numeric, 1),\n    sl.trigger_threshold\n  FROM sl\n  UNION ALL\n  SELECT '\u2467 Hop-2/3-Spike', 'Spike > 1.5\u00d7',\n    ((sl.details->>'trigger_hop_spike')::boolean)::int::numeric,\n    (sl.details->>'trigger_hop_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2468 CVD-Divergenz', 'Preis\u2191/CVD\u2193',\n    ROUND((sl.details->>'cvd_price_chg_pct')::numeric, 2),\n    (sl.details->>'trigger_cvd_div')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2469 Large Ask Sell', '\u22653\u00d7>6k/30min',\n    ((sl.details->>'trigger_large_sell')::boolean)::int::numeric,\n    (sl.details->>'trigger_large_sell')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246a Funding Spike', '> 0.0005',\n    ROUND(ABS((sl.details->>'funding_rate_pct')::numeric), 4),\n    (sl.details->>'trigger_funding_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246b Liq-Sweep (Long>5\u00d7Short)', '> 5\u00d7 (1h)',\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    )::numeric,\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    ) > 5\n) sub\nORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Signal Trigger Status",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mount_midas_pg"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 8,
+        "y": 81
+      },
+      "id": 6,
+      "options": {
+        "baidu": {
+          "callback": "bmapReady",
+          "key": ""
         },
+        "editor": {
+          "format": "auto"
+        },
+        "editorMode": "code",
+        "gaode": {
+          "key": "",
+          "plugin": "AMap.Scale,AMap.ToolBar"
+        },
+        "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst hopArr = getVals(s0.fields.find(f => f.name === 'hop'));\nconst icpArr = getVals(s0.fields.find(f => f.name === 'icp'));\n\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\nconst COLORS = ['#26a69a', '#4db6ac', '#ffb74d', '#ef5350'];\nconst LABELS = {\n  'Hop 0': 'Hop 0 \u2014 direkt',\n  'Hop 1': 'Hop 1 \u2014 Zwischen',\n  'Hop 2': 'Hop 2 \u2014 Zwischenstufe',\n  'Hop 3': 'Hop 3 \u2014 Ziel'\n};\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: { left: 120, right: 70, top: 10, bottom: 30 },\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'shadow' },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const p = params[0];\n      return '<b>' + (LABELS[p.name] || p.name) + '</b><br/>Total: <b>' + fmtICP(p.value) + ' ICP</b>';\n    }\n  },\n  xAxis: {\n    type: 'value',\n    axisLabel: { color: '#aaa', fontSize: 10, formatter: v => fmtICP(v) },\n    splitLine: { lineStyle: { color: '#2a2a2a' } },\n    axisLine: { show: false },\n    axisTick: { show: false }\n  },\n  yAxis: {\n    type: 'category',\n    data: hopArr,\n    axisLabel: {\n      color: '#aaa', fontSize: 11,\n      formatter: v => LABELS[v] || v\n    },\n    axisLine: { lineStyle: { color: '#555' } },\n    axisTick: { show: false },\n    splitLine: { show: false }\n  },\n  series: [{\n    type: 'bar',\n    barMaxWidth: 28,\n    data: icpArr.map((v, i) => ({\n      value: v,\n      itemStyle: { color: COLORS[i % COLORS.length] },\n      label: {\n        show: true,\n        position: 'right',\n        formatter: p => fmtICP(p.value),\n        color: '#ccc',\n        fontSize: 10\n      }\n    }))\n  }]\n};",
+        "google": {
+          "callback": "gmapReady",
+          "key": ""
+        },
+        "map": "none",
+        "renderer": "canvas",
+        "themeEditor": {
+          "config": "{}",
+          "name": "default"
+        },
+        "visualEditor": {
+          "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
+          "dataset": [],
+          "series": []
+        }
+      },
+      "pluginVersion": "7.2.5",
+      "targets": [
         {
           "datasource": {
             "type": "postgres",
             "uid": "mount_midas_pg"
           },
-          "gridPos": {
-            "h": 10,
-            "w": 8,
-            "x": 8,
-            "y": 67
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  'Hop ' || hop_depth::text AS hop,\n  ROUND(SUM(amount_icp))::float8 AS icp\nFROM wallet_movements\nWHERE ts >= NOW() - INTERVAL '10 days'\n  AND amount_icp > 100\nGROUP BY hop_depth\nORDER BY hop_depth ASC",
+          "refId": "A",
+          "sql": {
+            "columns": [],
+            "groupBy": [],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "NP Wallet Bewegungen \u2014 letzte 10 Tage (>100 ICP)",
+      "type": "volkovlabs-echarts-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "5 gewichtete Einzel-Signale.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
           },
-          "id": 6,
-          "options": {
-            "baidu": {
-              "callback": "bmapReady",
-              "key": ""
-            },
-            "editor": {
-              "format": "auto"
-            },
-            "editorMode": "code",
-            "gaode": {
-              "key": "",
-              "plugin": "AMap.Scale,AMap.ToolBar"
-            },
-            "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst hopArr = getVals(s0.fields.find(f => f.name === 'hop'));\nconst icpArr = getVals(s0.fields.find(f => f.name === 'icp'));\n\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\nconst COLORS = ['#26a69a', '#4db6ac', '#ffb74d', '#ef5350'];\nconst LABELS = {\n  'Hop 0': 'Hop 0 \u2014 direkt',\n  'Hop 1': 'Hop 1 \u2014 Zwischen',\n  'Hop 2': 'Hop 2 \u2014 Zwischenstufe',\n  'Hop 3': 'Hop 3 \u2014 Ziel'\n};\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: { left: 120, right: 70, top: 10, bottom: 30 },\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'shadow' },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const p = params[0];\n      return '<b>' + (LABELS[p.name] || p.name) + '</b><br/>Total: <b>' + fmtICP(p.value) + ' ICP</b>';\n    }\n  },\n  xAxis: {\n    type: 'value',\n    axisLabel: { color: '#aaa', fontSize: 10, formatter: v => fmtICP(v) },\n    splitLine: { lineStyle: { color: '#2a2a2a' } },\n    axisLine: { show: false },\n    axisTick: { show: false }\n  },\n  yAxis: {\n    type: 'category',\n    data: hopArr,\n    axisLabel: {\n      color: '#aaa', fontSize: 11,\n      formatter: v => LABELS[v] || v\n    },\n    axisLine: { lineStyle: { color: '#555' } },\n    axisTick: { show: false },\n    splitLine: { show: false }\n  },\n  series: [{\n    type: 'bar',\n    barMaxWidth: 28,\n    data: icpArr.map((v, i) => ({\n      value: v,\n      itemStyle: { color: COLORS[i % COLORS.length] },\n      label: {\n        show: true,\n        position: 'right',\n        formatter: p => fmtICP(p.value),\n        color: '#ccc',\n        fontSize: 10\n      }\n    }))\n  }]\n};",
-            "google": {
-              "callback": "gmapReady",
-              "key": ""
-            },
-            "map": "none",
-            "renderer": "canvas",
-            "themeEditor": {
-              "config": "{}",
-              "name": "default"
-            },
-            "visualEditor": {
-              "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
-              "dataset": [],
-              "series": []
-            }
-          },
-          "pluginVersion": "7.2.5",
-          "targets": [
-            {
-              "datasource": {
-                "type": "postgres",
-                "uid": "mount_midas_pg"
+          "decimals": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": 0
               },
-              "editorMode": "code",
-              "format": "table",
-              "rawQuery": true,
-              "rawSql": "SELECT\n  'Hop ' || hop_depth::text AS hop,\n  ROUND(SUM(amount_icp))::float8 AS icp\nFROM wallet_movements\nWHERE ts >= NOW() - INTERVAL '10 days'\n  AND amount_icp > 100\nGROUP BY hop_depth\nORDER BY hop_depth ASC",
-              "refId": "A",
-              "sql": {
-                "columns": [],
-                "groupBy": [],
-                "limit": 50
+              {
+                "color": "#FADE2A",
+                "value": 10
+              },
+              {
+                "color": "#F2495C",
+                "value": 20
               }
-            }
-          ],
-          "title": "NP Wallet Bewegungen \u2014 letzte 10 Tage (>100 ICP)",
-          "type": "volkovlabs-echarts-panel"
+            ]
+          },
+          "unit": "none"
         },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Taker Sell (32%)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 32
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Momentum (23%)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 23
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Price Drop (20%)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 20
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OI Change (15%)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 15
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "L/S Shift (10%)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 10
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 81
+      },
+      "id": 402,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
             "uid": "mount_midas_pg"
           },
-          "description": "5 gewichtete Einzel-Signale.",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "decimals": 1,
-              "min": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "#73BF69",
-                    "value": 0
-                  },
-                  {
-                    "color": "#FADE2A",
-                    "value": 10
-                  },
-                  {
-                    "color": "#F2495C",
-                    "value": 20
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Taker Sell (32%)"
-                },
-                "properties": [
-                  {
-                    "id": "max",
-                    "value": 32
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Momentum (23%)"
-                },
-                "properties": [
-                  {
-                    "id": "max",
-                    "value": 23
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Price Drop (20%)"
-                },
-                "properties": [
-                  {
-                    "id": "max",
-                    "value": 20
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "OI Change (15%)"
-                },
-                "properties": [
-                  {
-                    "id": "max",
-                    "value": 15
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "L/S Shift (10%)"
-                },
-                "properties": [
-                  {
-                    "id": "max",
-                    "value": 10
-                  }
-                ]
-              }
-            ]
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 8,
-            "x": 16,
-            "y": 67
-          },
-          "id": 402,
-          "options": {
-            "displayMode": "gradient",
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": false
-            },
-            "maxVizHeight": 300,
-            "minVizHeight": 16,
-            "minVizWidth": 8,
-            "namePlacement": "auto",
-            "orientation": "horizontal",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "sizing": "auto",
-            "valueMode": "color"
-          },
-          "pluginVersion": "13.0.1+security-01",
-          "targets": [
-            {
-              "datasource": {
-                "type": "grafana-postgresql-datasource",
-                "uid": "mount_midas_pg"
-              },
-              "format": "table",
-              "rawSql": "SELECT\n  (s_taker    * 0.32)::float8 AS \"Taker Sell (32%)\",\n  (s_momentum * 0.23)::float8 AS \"Momentum (23%)\",\n  (s_delta    * 0.20)::float8 AS \"Price Drop (20%)\",\n  (s_oi       * 0.15)::float8 AS \"OI Change (15%)\",\n  (s_ls       * 0.10)::float8 AS \"L/S Shift (10%)\"\nFROM epz_scores ORDER BY ts DESC LIMIT 1",
-              "refId": "A"
-            }
-          ],
-          "title": "EPZ Sub-Scores",
-          "type": "bargauge"
+          "format": "table",
+          "rawSql": "SELECT\n  (s_taker    * 0.32)::float8 AS \"Taker Sell (32%)\",\n  (s_momentum * 0.23)::float8 AS \"Momentum (23%)\",\n  (s_delta    * 0.20)::float8 AS \"Price Drop (20%)\",\n  (s_oi       * 0.15)::float8 AS \"OI Change (15%)\",\n  (s_ls       * 0.10)::float8 AS \"L/S Shift (10%)\"\nFROM epz_scores ORDER BY ts DESC LIMIT 1",
+          "refId": "A"
         }
       ],
-      "title": "Ops & Signal",
-      "type": "row"
+      "title": "EPZ Sub-Scores",
+      "type": "bargauge"
     },
     {
       "collapsed": false,
@@ -2127,7 +3155,7 @@
         "x": 0,
         "y": 91
       },
-      "id": 607,
+      "id": 623,
       "title": "Korrelation & Edge",
       "type": "row"
     },
@@ -2420,7 +3448,7 @@
         "x": 0,
         "y": 96
       },
-      "id": 608,
+      "id": 624,
       "title": "NP-Analyse",
       "type": "row"
     },
@@ -2944,927 +3972,6 @@
       ],
       "title": "Exchange-Flow % \u2014 monatlich",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisLabel": "Predicted FR (%)",
-            "drawStyle": "line",
-            "fillOpacity": 8,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "stepAfter",
-            "lineWidth": 2,
-            "pointSize": 4,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "decimals": 5,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "HL"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FFB300",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Binance"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#F4511E",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bybit"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#7E57C2",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 14,
-        "x": 0,
-        "y": 73
-      },
-      "id": 610,
-      "options": {
-        "legend": {
-          "calcs": [
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS \"time\",\n  MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate * 100 END) AS \"HL\",\n  MAX(CASE WHEN exchange = 'binance' THEN predicted_rate * 100 END) AS \"Binance\",\n  MAX(CASE WHEN exchange = 'bybit'   THEN predicted_rate * 100 END) AS \"Bybit\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND $__timeFilter(ts)\nGROUP BY ts\nORDER BY ts",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted Funding \u2014 Cross-Exchange Vergleich (ICP)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": null
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 5,
-        "x": 14,
-        "y": 73
-      },
-      "id": 611,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'hl'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: HL",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": null
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 5,
-        "x": 19,
-        "y": 73
-      },
-      "id": 612,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'binance'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: Binance",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": null
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 14,
-        "y": 76
-      },
-      "id": 613,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'bybit'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: Bybit",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#26a69a",
-                "value": null
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.03
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.06
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 19,
-        "y": 76
-      },
-      "id": 614,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  ABS(\n    MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate END) -\n    MAX(CASE WHEN exchange = 'binance' THEN predicted_rate END)\n  ) * 100 AS \"HL/Bin Spread\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND ts >= NOW() - INTERVAL '10 minutes'",
-          "refId": "A"
-        }
-      ],
-      "title": "Spread HL vs Binance",
-      "type": "stat"
-    },
-    {
-      "id": 616,
-      "type": "timeseries",
-      "title": "Liq Flow \u2014 OKX ICP/USDT Perp",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 48
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  date_trunc('hour', ts) AS \"time\",\n  SUM(quantity_icp)::float8 AS \"Long Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'long' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  date_trunc('hour', ts) AS \"time\",\n  -SUM(quantity_icp)::float8 AS \"Short Liq (ICP)\"\nFROM liquidation_events\nWHERE side = 'short' AND $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS \"time\",\n  oi_icp::float8 AS \"Binance OI (ICP)\"\nFROM open_interest\nWHERE exchange = 'binance' AND $__timeFilter(ts)\nORDER BY ts",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "barAlignment": 0,
-            "lineWidth": 0,
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "spanNulls": false,
-            "showPoints": "never"
-          },
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Long Liq (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#ef5350",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "Long Liq (ICP)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Short Liq (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#26a69a",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "displayName",
-                "value": "Short Liq (ICP)"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Binance OI (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FFB300",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "line"
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 2
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "OI (ICP)"
-              },
-              {
-                "id": "displayName",
-                "value": "Binance OI (ICP)"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        }
-      },
-      "transformations": []
-    },
-    {
-      "id": 620,
-      "type": "row",
-      "title": "Institutional Flow \u2014 TWAP Detection",
-      "collapsed": false,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 56
-      },
-      "panels": [],
-      "targets": []
-    },
-    {
-      "id": 617,
-      "type": "timeseries",
-      "title": "TWAP Activity \u2014 Institutional Flow (Spot)",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 20,
-        "x": 0,
-        "y": 57
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", quantity_icp::float8 AS \"Buy TWAP (ICP)\"\nFROM scored\nWHERE NOT is_buyer_maker AND seq_score >= 3\nORDER BY ts",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", (-quantity_icp)::float8 AS \"Sell TWAP (ICP)\"\nFROM scored\nWHERE is_buyer_maker AND seq_score >= 3\nORDER BY ts",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "bars",
-            "barAlignment": 0,
-            "lineWidth": 0,
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "spanNulls": false,
-            "showPoints": "auto",
-            "pointSize": 8
-          },
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Buy TWAP (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#66BB6A",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Sell TWAP (ICP)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#EF5350",
-                  "mode": "fixed"
-                }
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "id": 618,
-      "type": "stat",
-      "title": "Buy TWAP Score",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 57
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND NOT is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Buy TWAP Score\"\nFROM flagged",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "\u2014",
-                  "color": "#546E7A"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "1": {
-                  "text": "M\u00f6glich (1/3)"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "2": {
-                  "text": "Wahrsch. (2/3)"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "3": {
-                  "text": "AKTIV (3/3)"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#546E7A",
-                "value": null
-              },
-              {
-                "color": "#FFB300",
-                "value": 2
-              },
-              {
-                "color": "#66BB6A",
-                "value": 3
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 619,
-      "type": "stat",
-      "title": "Sell TWAP Score",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 61
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Sell TWAP Score\"\nFROM flagged",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "\u2014",
-                  "color": "#546E7A"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "1": {
-                  "text": "M\u00f6glich (1/3)"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "2": {
-                  "text": "Wahrsch. (2/3)"
-                }
-              }
-            },
-            {
-              "type": "value",
-              "options": {
-                "3": {
-                  "text": "AKTIV (3/3)"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#546E7A",
-                "value": null
-              },
-              {
-                "color": "#FFB300",
-                "value": 2
-              },
-              {
-                "color": "#EF5350",
-                "value": 3
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      }
     }
   ],
   "preload": false,
@@ -3916,5 +4023,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 132
+  "version": 142
 }
