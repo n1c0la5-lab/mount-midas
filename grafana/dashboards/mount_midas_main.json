@@ -30,7 +30,7 @@
         "y": 0
       },
       "id": 605,
-      "title": "Regime — Marktphase",
+      "title": "Regime \u2014 Marktphase",
       "type": "row"
     },
     {
@@ -475,7 +475,7 @@
           "key": "",
           "plugin": "AMap.Scale,AMap.ToolBar"
         },
-        "getOption": "const s0 = context.panel.data.series[0];  // Tick-Trades\nconst s1 = context.panel.data.series[1];  // NP→Exchange\nconst s2 = context.panel.data.series[2];  // FR Flips\nconst s3 = context.panel.data.series[3];  // Regime-Wechsel\nconst s4 = context.panel.data.series[4];  // Large Sells\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\n// --- Tick-Trades ---\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\n// --- 200-Tick Kerzen berechnen ---\nconst TICK_SIZE = 200;\nconst candles = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  let high = priceArr[start], low = priceArr[start];\n  let buyVol = 0, sellVol = 0;\n  for (let j = start; j < end; j++) {\n    if (priceArr[j] > high) high = priceArr[j];\n    if (priceArr[j] < low)  low  = priceArr[j];\n    if (bmArr[j]) sellVol += qtyArr[j];\n    else          buyVol  += qtyArr[j];\n  }\n  candles.push({\n    tsMs:       tsMsArr[start],\n    tsEnd:      tsMsArr[end - 1],\n    open:       priceArr[start],\n    high, low,\n    close:      priceArr[end - 1],\n    buyVol, sellVol,\n    tickCount:  end - start,\n    durationMs: tsMsArr[end - 1] - tsMsArr[start],\n    isLive:     (end - start) < TICK_SIZE\n  });\n}\n\n// --- NP→Exchange auf Kerzen mappen ---\nconst npByCandle = new Array(candles.length).fill(0);\nif (s1 && s1.fields.length) {\n  const npTs  = getVals(s1.fields.find(f => f.name === 'ts_ms'));\n  const npAmt = getVals(s1.fields.find(f => f.name === 'amount'));\n\n  for (let i = 0; i < npTs.length; i++) {\n    const t = npTs[i];\n    if (t < candles[0].tsMs) continue;\n    // Binärsuche: letzte Kerze mit tsMs <= t\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    npByCandle[lo] += npAmt[i];\n  }\n}\n\nconst maxNP = Math.max(...npByCandle.filter(v => v > 0), 1);\n// --- Rolling CVD (1000 Ticks = 5 Kerzen) ---\nconst ROLLING_CANDLES = Math.round(1000 / TICK_SIZE); // = 5\nconst rollingCVD = candles.map((_, i) => {\n  const start = Math.max(0, i - ROLLING_CANDLES + 1);\n  let sum = 0;\n  for (let j = start; j <= i; j++) sum += candles[j].buyVol - candles[j].sellVol;\n  return sum;\n});\n\n// --- Large Sells (s4) auf Kerzen mappen ---\nconst largeSellsByCandle = new Array(candles.length).fill(0);\nif (s4 && s4.fields.length) {\n  const lsTs  = getVals(s4.fields.find(f => f.name === 'ts_ms'));\n  const lsQty = getVals(s4.fields.find(f => f.name === 'qty'));\n  for (let i = 0; i < lsTs.length; i++) {\n    const t = lsTs[i];\n    if (!candles.length || t < candles[0].tsMs) continue;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    largeSellsByCandle[lo] += lsQty[i];\n  }\n}\n\n\n// --- FR Flip Linien ---\nconst flipLines = [];\nif (s2 && s2.fields.length) {\n  const flipTs   = getVals(s2.fields.find(f => f.name === 'ts_ms'));\n  const flipType = getVals(s2.fields.find(f => f.name === 'flip_type'));\n  for (let i = 0; i < flipTs.length; i++) {\n    const t = flipTs[i];\n    if (!candles.length || t < candles[0].tsMs) continue;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    const isBull = flipType[i] === 'bullish';\n    const fcolor  = isBull ? '#26a69a' : '#ef5350';\n    flipLines.push({\n      name: isBull ? 'FR Flip → Bullish' : 'FR Flip → Bearish',\n      xAxis: lo,\n      lineStyle: { color: fcolor, width: 1, type: 'dotted', opacity: 0.85 },\n      label: {\n        show: true,\n        position: 'insideEndBottom',\n        distance: 4,\n        formatter: isBull ? 'FR↑' : 'FR↓',\n        color: fcolor,\n        fontSize: 9,\n        fontWeight: 'bold'\n      }\n    });\n  }\n}\n\n\n// --- Regime Hintergrund ---\nconst REGIME_COLORS = {\n  'KOMPRESSION_STARK':   'rgba(0,230,118,0.22)',\n  'KOMPRESSION':         'rgba(38,166,154,0.20)',\n  'KOMPRESSION_SCHWACH': 'rgba(139,195,74,0.17)',\n  'TRIGGER_BULLISH':     'rgba(255,235,59,0.22)',\n  'NEUTRAL':             'rgba(0,0,0,0)',\n  'DISTRIBUTION':        'rgba(255,152,0,0.22)',\n  'DISTRIBUTION_STARK':  'rgba(255,87,34,0.25)',\n  'DISTRIBUTION_TOP':    'rgba(239,83,80,0.30)',\n};\nconst REGIME_LABEL_SHORT = {\n  'KOMPRESSION_STARK':   '🟢🟢 Stark',\n  'KOMPRESSION':         '🟢 Komp',\n  'KOMPRESSION_SCHWACH': '🟡 Komp',\n  'TRIGGER_BULLISH':     '⚠️ Trigger',\n  'NEUTRAL':             '',\n  'DISTRIBUTION':        '🔴 Dist',\n  'DISTRIBUTION_STARK':  '🔴🔴 Dist',\n  'DISTRIBUTION_TOP':    '🔴🔴 TOP',\n};\nconst REGIME_LABEL_COLOR = {\n  'KOMPRESSION_STARK':   '#00e676',\n  'KOMPRESSION':         '#4db6ac',\n  'KOMPRESSION_SCHWACH': '#aed581',\n  'TRIGGER_BULLISH':     '#fff176',\n  'NEUTRAL':             'transparent',\n  'DISTRIBUTION':        '#ffb74d',\n  'DISTRIBUTION_STARK':  '#ff7043',\n  'DISTRIBUTION_TOP':    '#ef5350',\n};\nconst regimeAreas = [];\nlet currentRegime = 'NEUTRAL';\nif (s3 && s3.fields.length && candles.length) {\n  const rTs  = getVals(s3.fields.find(f => f.name === 'ts_ms'));\n  const rReg = getVals(s3.fields.find(f => f.name === 'regime'));\n  if (rReg.length > 0) currentRegime = rReg[rReg.length - 1];\n  // Hilfsfunktion: Timestamp → nächster Kerzen-Index\n  const tsToIdx = t => {\n    if (t <= candles[0].tsMs) return 0;\n    if (t >= candles[candles.length-1].tsMs) return candles.length - 1;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid; else hi = mid - 1;\n    }\n    return lo;\n  };\n  for (let i = 0; i < rTs.length; i++) {\n    const startIdx = tsToIdx(rTs[i]);\n    const endIdx   = i + 1 < rTs.length ? tsToIdx(rTs[i + 1]) : candles.length - 1;\n    const color    = REGIME_COLORS[rReg[i]] || 'rgba(0,0,0,0)';\n    if (color === 'rgba(0,0,0,0)') continue;  // NEUTRAL: kein Block\n    const rLabel = REGIME_LABEL_SHORT[rReg[i]] || '';\n    const rColor = REGIME_LABEL_COLOR[rReg[i]] || '#fff';\n    regimeAreas.push([\n      {\n        xAxis: startIdx,\n        itemStyle: { color },\n        label: {\n          show: rLabel !== '' && (endIdx - startIdx) > 2,\n          position: 'inside',\n          rotate: 90,\n          formatter: rLabel,\n          color: rColor,\n          fontSize: 9,\n          fontWeight: 'bold'\n        }\n      },\n      { xAxis: endIdx }\n    ]);\n  }\n}\n\n// --- Labels ---\n\n// Zoom-State als Property auf der Chart-Instanz speichern\n// (überlebt Refreshes, weil die ECharts-Instanz dieselbe bleibt)\nconst chart = context.panel.chart;\nlet zoomStart = 50, zoomEnd = 100;\nif (chart) {\n  // Gespeicherten Zoom lesen (von vorherigem Render)\n  if (typeof chart.__mmZoomStart !== 'undefined') {\n    zoomStart = chart.__mmZoomStart;  // unused\n    zoomEnd   = chart.__mmZoomEnd;\n  }\n  // Listener registrieren der Zoom-Änderungen mitschreibt\n  chart.off('datazoom');\n  chart.on('datazoom', () => {\n    try {\n      const opt = chart.getOption();\n      if (opt && opt.dataZoom && opt.dataZoom[0]) {\n        chart.__mmZoomStart = opt.dataZoom[0].start;\n        chart.__mmZoomEnd   = opt.dataZoom[0].end;\n      }\n    } catch(e) {}\n  });\n}\n\nconst labels = candles.map((c, i) => {\n  const d  = new Date(c.tsMs);\n  const hm = d.toISOString().slice(11, 16);\n  if (i === 0) return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  const prev = new Date(candles[i - 1].tsMs);\n  if (d.getUTCDate() !== prev.getUTCDate())\n    return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  return hm;\n});\n\nconst fmtDur = ms => {\n  const s = Math.round(ms / 1000);\n  if (s < 60)   return s + 's';\n  if (s < 3600) return Math.round(s / 60) + 'min';\n  return (s / 3600).toFixed(1) + 'h';\n};\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\n\nconst BULL = '#26a69a';\nconst BEAR = '#ef5350';\nconst GREY = '#666666';\nconst NP_COLOR = '#ff9800';\n\nconst _curLabel = currentRegime === 'NEUTRAL' ? 'Neutral' : (REGIME_LABEL_SHORT[currentRegime] || currentRegime);\nconst _curColor = REGIME_LABEL_COLOR[currentRegime] || '#aaa';\n\nreturn {\n  backgroundColor: 'transparent',\n  graphic: [{\n    type: 'text',\n    right: 28,\n    top: 14,\n    style: {\n      text: 'Regime: ' + _curLabel,\n      fontSize: 11,\n      fontWeight: 'bold',\n      fill: _curColor\n    }\n  }],\n  animation: false,\n  grid: [\n    { left: 70, right: 20, top: 10, bottom: 80 },\n    { left: 70, right: 20, top: '72%', bottom: 40 }\n  ],\n  xAxis: [\n    {\n      type: 'category', data: labels, gridIndex: 0,\n      axisLine: { lineStyle: { color: '#555' } },\n      axisLabel: { color: '#aaa', fontSize: 10 },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    },\n    {\n      type: 'category', data: labels, gridIndex: 1,\n      axisLabel: { show: false },\n      axisLine: { lineStyle: { color: '#555' } },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    }\n  ],\n  yAxis: [\n    {\n      scale: true, gridIndex: 0,\n      axisLabel: { color: '#aaa', fontSize: 11, formatter: v => v.toFixed(3) },\n      splitLine: { lineStyle: { color: '#2a2a2a' } },\n      axisLine: { show: false }, axisTick: { show: false }\n    },\n    {\n      scale: true, gridIndex: 1,\n      axisLabel: { color: '#29b6f6', fontSize: 10,\n        formatter: v => (Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) },\n      splitLine: { lineStyle: { color: '#1a2a3a', type: 'dashed' } },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 3\n    }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    {\n      type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 25,\n      start: 50, end: 100,\n      textStyle: { color: '#888' }, borderColor: '#444',\n      fillerColor: 'rgba(80,80,80,0.3)',\n      handleStyle: { color: '#777', borderColor: '#555' }\n    }\n  ],\n\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const cp = params.find(p => p.seriesName === 'ICP 200-Tick');\n      if (!cp) return '';\n      const idx = cp.dataIndex;\n      const c   = candles[idx];\n      if (!c) return '';\n      const chg   = ((c.close - c.open) / c.open * 100).toFixed(2);\n      const arrow = c.close >= c.open ? '\\u25b2' : '\\u25bc';\n      const color = c.close >= c.open ? BULL : BEAR;\n      const net   = c.buyVol - c.sellVol;\n      const nc    = net >= 0 ? BULL : BEAR;\n      const live  = c.isLive ? ' <span style=\"color:#aaa\">\\u25cf live ' + c.tickCount + '/200</span>' : '';\n      const np    = npByCandle[idx] > 0\n        ? '<br/><span style=\"color:' + NP_COLOR + '\">\\u25bc NP\\u2192Exchange: ' + fmtICP(npByCandle[idx]) + ' ICP</span>'\n        : '';\n      return (\n        '<b>' + new Date(c.tsMs).toISOString().slice(0,16).replace('T',' ') + ' UTC</b>' + live + '<br/>' +\n        'O: ' + c.open.toFixed(4) + '  H: ' + c.high.toFixed(4) + '<br/>' +\n        'L: ' + c.low.toFixed(4) + '  C: ' + c.close.toFixed(4) + '<br/>' +\n        '<span style=\"color:' + color + '\">' + arrow + ' ' + chg + '%</span>' +\n        '  <span style=\"color:#aaa\">\\u23f1 ' + fmtDur(c.durationMs) + '</span><br/>' +\n        'Buy: ' + (c.buyVol/1000).toFixed(1) + 'k  Sell: ' + (c.sellVol/1000).toFixed(1) + 'k  ' +\n        '<span style=\"color:' + nc + '\">' + (net>=0?'+':'') + (net/1000).toFixed(1) + 'k</span>' +\n        np +\n        (() => {\n          const cv = rollingCVD[idx];\n          const cc = cv >= 0 ? BULL : BEAR;\n          const ls = largeSellsByCandle[idx];\n          return (\n            '\\nRolling CVD (1k): <span style=\"color:' + cc + '\">' + (cv>=0?'+':'') + (cv/1000).toFixed(1) + 'k</span>' +\n            (ls > 0 ? '\\n\\ud83d\\udd34 Large Sell: <b>' + fmtICP(ls) + ' ICP</b>' : '')\n          );\n        })()\n      );\n    }\n  },\n  series: [\n    {\n      name: 'ICP 200-Tick',\n      type: 'candlestick',\n      xAxisIndex: 0, yAxisIndex: 0,\n      itemStyle: { color: BULL, color0: BEAR, borderColor: BULL, borderColor0: BEAR },\n      data: candles.map(c => c.isLive\n        ? { value: [c.open, c.close, c.low, c.high],\n            itemStyle: { color: GREY, color0: GREY, borderColor: '#999', borderColor0: '#999' } }\n        : [c.open, c.close, c.low, c.high]\n      ),\n      markLine: {\n        silent: true, symbol: 'none', animation: false,\n        data: flipLines\n      },\n      markArea: {\n        silent: true,\n        data: regimeAreas\n      }\n    },\n    {\n      name: 'NP\\u2192Exchange',\n      type: 'scatter',\n      xAxisIndex: 0, yAxisIndex: 0,\n      symbol: 'triangle',\n      symbolRotate: 180,\n      itemStyle: { color: NP_COLOR },\n      label: {\n        show: true,\n        formatter: p => {\n          const amt = npByCandle[p.dataIndex];\n          return amt > 0 ? fmtICP(amt) : '';\n        },\n        position: 'top',\n        color: NP_COLOR,\n        fontSize: 9,\n        fontWeight: 'bold'\n      },\n      data: candles.map((c, i) => {\n        if (npByCandle[i] <= 0) return { value: [i, null], symbolSize: 0 };\n        const size = Math.min(32, Math.max(8, Math.log10(npByCandle[i]) * 7));\n        return { value: [i, c.high * 1.004], symbolSize: size };\n      })\n    },\n\n    {\n      name: 'Rolling CVD+',\n      type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: rollingCVD.map(v => Math.max(0, v)),\n      itemStyle: { color: 'rgba(41,182,246,0.8)' },\n      barMaxWidth: 10,\n      z: 10\n    },\n    {\n      name: 'Rolling CVD-',\n      type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: rollingCVD.map(v => Math.min(0, v)),\n      itemStyle: { color: 'rgba(255,167,38,0.8)' },\n      barMaxWidth: 10,\n      z: 10\n    },\n    {\n      name: 'Large Sell',\n      type: 'scatter',\n      xAxisIndex: 0, yAxisIndex: 0,\n      symbol: 'triangle',\n      symbolRotate: 180,\n      itemStyle: { color: '#ff1744', opacity: 0.9 },\n      label: {\n        show: true,\n        formatter: p => {\n          const qty = largeSellsByCandle[p.dataIndex];\n          return qty > 0 ? fmtICP(qty) : '';\n        },\n        position: 'top',\n        color: '#ff1744',\n        fontSize: 9,\n        fontWeight: 'bold'\n      },\n      data: candles.map((c, i) => {\n        if (!largeSellsByCandle[i]) return { value: [i, null], symbolSize: 0 };\n        const size = Math.min(22, Math.max(8, Math.log10(largeSellsByCandle[i]) * 6));\n        return { value: [i, c.high * 1.006], symbolSize: size };\n      })\n    }\n  ]\n};",
+        "getOption": "const s0 = context.panel.data.series[0];  // Tick-Trades\nconst s1 = context.panel.data.series[1];  // NP\u2192Exchange\nconst s2 = context.panel.data.series[2];  // FR Flips\nconst s3 = context.panel.data.series[3];  // Regime-Wechsel\nconst s4 = context.panel.data.series[4];  // Large Sells\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\n// --- Tick-Trades ---\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\n// --- 200-Tick Kerzen berechnen ---\nconst TICK_SIZE = 200;\nconst candles = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  let high = priceArr[start], low = priceArr[start];\n  let buyVol = 0, sellVol = 0;\n  for (let j = start; j < end; j++) {\n    if (priceArr[j] > high) high = priceArr[j];\n    if (priceArr[j] < low)  low  = priceArr[j];\n    if (bmArr[j]) sellVol += qtyArr[j];\n    else          buyVol  += qtyArr[j];\n  }\n  candles.push({\n    tsMs:       tsMsArr[start],\n    tsEnd:      tsMsArr[end - 1],\n    open:       priceArr[start],\n    high, low,\n    close:      priceArr[end - 1],\n    buyVol, sellVol,\n    tickCount:  end - start,\n    durationMs: tsMsArr[end - 1] - tsMsArr[start],\n    isLive:     (end - start) < TICK_SIZE\n  });\n}\n\n// --- NP\u2192Exchange auf Kerzen mappen ---\nconst npByCandle = new Array(candles.length).fill(0);\nif (s1 && s1.fields.length) {\n  const npTs  = getVals(s1.fields.find(f => f.name === 'ts_ms'));\n  const npAmt = getVals(s1.fields.find(f => f.name === 'amount'));\n\n  for (let i = 0; i < npTs.length; i++) {\n    const t = npTs[i];\n    if (t < candles[0].tsMs) continue;\n    // Bin\u00e4rsuche: letzte Kerze mit tsMs <= t\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    npByCandle[lo] += npAmt[i];\n  }\n}\n\nconst maxNP = Math.max(...npByCandle.filter(v => v > 0), 1);\n// --- Rolling CVD (1000 Ticks = 5 Kerzen) ---\nconst ROLLING_CANDLES = Math.round(1000 / TICK_SIZE); // = 5\nconst rollingCVD = candles.map((_, i) => {\n  const start = Math.max(0, i - ROLLING_CANDLES + 1);\n  let sum = 0;\n  for (let j = start; j <= i; j++) sum += candles[j].buyVol - candles[j].sellVol;\n  return sum;\n});\n\n// --- Large Sells (s4) auf Kerzen mappen ---\nconst largeSellsByCandle = new Array(candles.length).fill(0);\nif (s4 && s4.fields.length) {\n  const lsTs  = getVals(s4.fields.find(f => f.name === 'ts_ms'));\n  const lsQty = getVals(s4.fields.find(f => f.name === 'qty'));\n  for (let i = 0; i < lsTs.length; i++) {\n    const t = lsTs[i];\n    if (!candles.length || t < candles[0].tsMs) continue;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    largeSellsByCandle[lo] += lsQty[i];\n  }\n}\n\n\n// --- FR Flip Linien ---\nconst flipLines = [];\nif (s2 && s2.fields.length) {\n  const flipTs   = getVals(s2.fields.find(f => f.name === 'ts_ms'));\n  const flipType = getVals(s2.fields.find(f => f.name === 'flip_type'));\n  for (let i = 0; i < flipTs.length; i++) {\n    const t = flipTs[i];\n    if (!candles.length || t < candles[0].tsMs) continue;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid;\n      else hi = mid - 1;\n    }\n    const isBull = flipType[i] === 'bullish';\n    const fcolor  = isBull ? '#26a69a' : '#ef5350';\n    flipLines.push({\n      name: isBull ? 'FR Flip \u2192 Bullish' : 'FR Flip \u2192 Bearish',\n      xAxis: lo,\n      lineStyle: { color: fcolor, width: 1, type: 'dotted', opacity: 0.85 },\n      label: {\n        show: true,\n        position: 'insideEndBottom',\n        distance: 4,\n        formatter: isBull ? 'FR\u2191' : 'FR\u2193',\n        color: fcolor,\n        fontSize: 9,\n        fontWeight: 'bold'\n      }\n    });\n  }\n}\n\n\n// --- Regime Hintergrund ---\nconst REGIME_COLORS = {\n  'KOMPRESSION_STARK':   'rgba(0,230,118,0.22)',\n  'KOMPRESSION':         'rgba(38,166,154,0.20)',\n  'KOMPRESSION_SCHWACH': 'rgba(139,195,74,0.17)',\n  'TRIGGER_BULLISH':     'rgba(255,235,59,0.22)',\n  'NEUTRAL':             'rgba(0,0,0,0)',\n  'DISTRIBUTION':        'rgba(255,152,0,0.22)',\n  'DISTRIBUTION_STARK':  'rgba(255,87,34,0.25)',\n  'DISTRIBUTION_TOP':    'rgba(239,83,80,0.30)',\n};\nconst REGIME_LABEL_SHORT = {\n  'KOMPRESSION_STARK':   '\ud83d\udfe2\ud83d\udfe2 Stark',\n  'KOMPRESSION':         '\ud83d\udfe2 Komp',\n  'KOMPRESSION_SCHWACH': '\ud83d\udfe1 Komp',\n  'TRIGGER_BULLISH':     '\u26a0\ufe0f Trigger',\n  'NEUTRAL':             '',\n  'DISTRIBUTION':        '\ud83d\udd34 Dist',\n  'DISTRIBUTION_STARK':  '\ud83d\udd34\ud83d\udd34 Dist',\n  'DISTRIBUTION_TOP':    '\ud83d\udd34\ud83d\udd34 TOP',\n};\nconst REGIME_LABEL_COLOR = {\n  'KOMPRESSION_STARK':   '#00e676',\n  'KOMPRESSION':         '#4db6ac',\n  'KOMPRESSION_SCHWACH': '#aed581',\n  'TRIGGER_BULLISH':     '#fff176',\n  'NEUTRAL':             'transparent',\n  'DISTRIBUTION':        '#ffb74d',\n  'DISTRIBUTION_STARK':  '#ff7043',\n  'DISTRIBUTION_TOP':    '#ef5350',\n};\nconst regimeAreas = [];\nlet currentRegime = 'NEUTRAL';\nif (s3 && s3.fields.length && candles.length) {\n  const rTs  = getVals(s3.fields.find(f => f.name === 'ts_ms'));\n  const rReg = getVals(s3.fields.find(f => f.name === 'regime'));\n  if (rReg.length > 0) currentRegime = rReg[rReg.length - 1];\n  // Hilfsfunktion: Timestamp \u2192 n\u00e4chster Kerzen-Index\n  const tsToIdx = t => {\n    if (t <= candles[0].tsMs) return 0;\n    if (t >= candles[candles.length-1].tsMs) return candles.length - 1;\n    let lo = 0, hi = candles.length - 1;\n    while (lo < hi) {\n      const mid = Math.floor((lo + hi + 1) / 2);\n      if (candles[mid].tsMs <= t) lo = mid; else hi = mid - 1;\n    }\n    return lo;\n  };\n  for (let i = 0; i < rTs.length; i++) {\n    const startIdx = tsToIdx(rTs[i]);\n    const endIdx   = i + 1 < rTs.length ? tsToIdx(rTs[i + 1]) : candles.length - 1;\n    const color    = REGIME_COLORS[rReg[i]] || 'rgba(0,0,0,0)';\n    if (color === 'rgba(0,0,0,0)') continue;  // NEUTRAL: kein Block\n    const rLabel = REGIME_LABEL_SHORT[rReg[i]] || '';\n    const rColor = REGIME_LABEL_COLOR[rReg[i]] || '#fff';\n    regimeAreas.push([\n      {\n        xAxis: startIdx,\n        itemStyle: { color },\n        label: {\n          show: rLabel !== '' && (endIdx - startIdx) > 2,\n          position: 'inside',\n          rotate: 90,\n          formatter: rLabel,\n          color: rColor,\n          fontSize: 9,\n          fontWeight: 'bold'\n        }\n      },\n      { xAxis: endIdx }\n    ]);\n  }\n}\n\n// --- Labels ---\n\n// Zoom-State als Property auf der Chart-Instanz speichern\n// (\u00fcberlebt Refreshes, weil die ECharts-Instanz dieselbe bleibt)\nconst chart = context.panel.chart;\nlet zoomStart = 50, zoomEnd = 100;\nif (chart) {\n  // Gespeicherten Zoom lesen (von vorherigem Render)\n  if (typeof chart.__mmZoomStart !== 'undefined') {\n    zoomStart = chart.__mmZoomStart;  // unused\n    zoomEnd   = chart.__mmZoomEnd;\n  }\n  // Listener registrieren der Zoom-\u00c4nderungen mitschreibt\n  chart.off('datazoom');\n  chart.on('datazoom', () => {\n    try {\n      const opt = chart.getOption();\n      if (opt && opt.dataZoom && opt.dataZoom[0]) {\n        chart.__mmZoomStart = opt.dataZoom[0].start;\n        chart.__mmZoomEnd   = opt.dataZoom[0].end;\n      }\n    } catch(e) {}\n  });\n}\n\nconst labels = candles.map((c, i) => {\n  const d  = new Date(c.tsMs);\n  const hm = d.toISOString().slice(11, 16);\n  if (i === 0) return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  const prev = new Date(candles[i - 1].tsMs);\n  if (d.getUTCDate() !== prev.getUTCDate())\n    return d.toISOString().slice(5, 10).replace('-', '.') + ' ' + hm;\n  return hm;\n});\n\nconst fmtDur = ms => {\n  const s = Math.round(ms / 1000);\n  if (s < 60)   return s + 's';\n  if (s < 3600) return Math.round(s / 60) + 'min';\n  return (s / 3600).toFixed(1) + 'h';\n};\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\n\nconst BULL = '#26a69a';\nconst BEAR = '#ef5350';\nconst GREY = '#666666';\nconst NP_COLOR = '#ff9800';\n\nconst _curLabel = currentRegime === 'NEUTRAL' ? 'Neutral' : (REGIME_LABEL_SHORT[currentRegime] || currentRegime);\nconst _curColor = REGIME_LABEL_COLOR[currentRegime] || '#aaa';\n\nreturn {\n  backgroundColor: 'transparent',\n  graphic: [{\n    type: 'text',\n    right: 28,\n    top: 14,\n    style: {\n      text: 'Regime: ' + _curLabel,\n      fontSize: 11,\n      fontWeight: 'bold',\n      fill: _curColor\n    }\n  }],\n  animation: false,\n  grid: [\n    { left: 70, right: 20, top: 10, bottom: 80 },\n    { left: 70, right: 20, top: '72%', bottom: 40 }\n  ],\n  xAxis: [\n    {\n      type: 'category', data: labels, gridIndex: 0,\n      axisLine: { lineStyle: { color: '#555' } },\n      axisLabel: { color: '#aaa', fontSize: 10 },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    },\n    {\n      type: 'category', data: labels, gridIndex: 1,\n      axisLabel: { show: false },\n      axisLine: { lineStyle: { color: '#555' } },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true\n    }\n  ],\n  yAxis: [\n    {\n      scale: true, gridIndex: 0,\n      axisLabel: { color: '#aaa', fontSize: 11, formatter: v => v.toFixed(3) },\n      splitLine: { lineStyle: { color: '#2a2a2a' } },\n      axisLine: { show: false }, axisTick: { show: false }\n    },\n    {\n      scale: true, gridIndex: 1,\n      axisLabel: { color: '#29b6f6', fontSize: 10,\n        formatter: v => (Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) },\n      splitLine: { lineStyle: { color: '#1a2a3a', type: 'dashed' } },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 3\n    }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    {\n      type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 25,\n      start: 50, end: 100,\n      textStyle: { color: '#888' }, borderColor: '#444',\n      fillerColor: 'rgba(80,80,80,0.3)',\n      handleStyle: { color: '#777', borderColor: '#555' }\n    }\n  ],\n\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const cp = params.find(p => p.seriesName === 'ICP 200-Tick');\n      if (!cp) return '';\n      const idx = cp.dataIndex;\n      const c   = candles[idx];\n      if (!c) return '';\n      const chg   = ((c.close - c.open) / c.open * 100).toFixed(2);\n      const arrow = c.close >= c.open ? '\\u25b2' : '\\u25bc';\n      const color = c.close >= c.open ? BULL : BEAR;\n      const net   = c.buyVol - c.sellVol;\n      const nc    = net >= 0 ? BULL : BEAR;\n      const live  = c.isLive ? ' <span style=\"color:#aaa\">\\u25cf live ' + c.tickCount + '/200</span>' : '';\n      const np    = npByCandle[idx] > 0\n        ? '<br/><span style=\"color:' + NP_COLOR + '\">\\u25bc NP\\u2192Exchange: ' + fmtICP(npByCandle[idx]) + ' ICP</span>'\n        : '';\n      return (\n        '<b>' + new Date(c.tsMs).toISOString().slice(0,16).replace('T',' ') + ' UTC</b>' + live + '<br/>' +\n        'O: ' + c.open.toFixed(4) + '  H: ' + c.high.toFixed(4) + '<br/>' +\n        'L: ' + c.low.toFixed(4) + '  C: ' + c.close.toFixed(4) + '<br/>' +\n        '<span style=\"color:' + color + '\">' + arrow + ' ' + chg + '%</span>' +\n        '  <span style=\"color:#aaa\">\\u23f1 ' + fmtDur(c.durationMs) + '</span><br/>' +\n        'Buy: ' + (c.buyVol/1000).toFixed(1) + 'k  Sell: ' + (c.sellVol/1000).toFixed(1) + 'k  ' +\n        '<span style=\"color:' + nc + '\">' + (net>=0?'+':'') + (net/1000).toFixed(1) + 'k</span>' +\n        np +\n        (() => {\n          const cv = rollingCVD[idx];\n          const cc = cv >= 0 ? BULL : BEAR;\n          const ls = largeSellsByCandle[idx];\n          return (\n            '\\nRolling CVD (1k): <span style=\"color:' + cc + '\">' + (cv>=0?'+':'') + (cv/1000).toFixed(1) + 'k</span>' +\n            (ls > 0 ? '\\n\\ud83d\\udd34 Large Sell: <b>' + fmtICP(ls) + ' ICP</b>' : '')\n          );\n        })()\n      );\n    }\n  },\n  series: [\n    {\n      name: 'ICP 200-Tick',\n      type: 'candlestick',\n      xAxisIndex: 0, yAxisIndex: 0,\n      itemStyle: { color: BULL, color0: BEAR, borderColor: BULL, borderColor0: BEAR },\n      data: candles.map(c => c.isLive\n        ? { value: [c.open, c.close, c.low, c.high],\n            itemStyle: { color: GREY, color0: GREY, borderColor: '#999', borderColor0: '#999' } }\n        : [c.open, c.close, c.low, c.high]\n      ),\n      markLine: {\n        silent: true, symbol: 'none', animation: false,\n        data: flipLines\n      },\n      markArea: {\n        silent: true,\n        data: regimeAreas\n      }\n    },\n    {\n      name: 'NP\\u2192Exchange',\n      type: 'scatter',\n      xAxisIndex: 0, yAxisIndex: 0,\n      symbol: 'triangle',\n      symbolRotate: 180,\n      itemStyle: { color: NP_COLOR },\n      label: {\n        show: true,\n        formatter: p => {\n          const amt = npByCandle[p.dataIndex];\n          return amt > 0 ? fmtICP(amt) : '';\n        },\n        position: 'top',\n        color: NP_COLOR,\n        fontSize: 9,\n        fontWeight: 'bold'\n      },\n      data: candles.map((c, i) => {\n        if (npByCandle[i] <= 0) return { value: [i, null], symbolSize: 0 };\n        const size = Math.min(32, Math.max(8, Math.log10(npByCandle[i]) * 7));\n        return { value: [i, c.high * 1.004], symbolSize: size };\n      })\n    },\n\n    {\n      name: 'Rolling CVD+',\n      type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: rollingCVD.map(v => Math.max(0, v)),\n      itemStyle: { color: 'rgba(41,182,246,0.8)' },\n      barMaxWidth: 10,\n      z: 10\n    },\n    {\n      name: 'Rolling CVD-',\n      type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: rollingCVD.map(v => Math.min(0, v)),\n      itemStyle: { color: 'rgba(255,167,38,0.8)' },\n      barMaxWidth: 10,\n      z: 10\n    },\n    {\n      name: 'Large Sell',\n      type: 'scatter',\n      xAxisIndex: 0, yAxisIndex: 0,\n      symbol: 'triangle',\n      symbolRotate: 180,\n      itemStyle: { color: '#ff1744', opacity: 0.9 },\n      label: {\n        show: true,\n        formatter: p => {\n          const qty = largeSellsByCandle[p.dataIndex];\n          return qty > 0 ? fmtICP(qty) : '';\n        },\n        position: 'top',\n        color: '#ff1744',\n        fontSize: 9,\n        fontWeight: 'bold'\n      },\n      data: candles.map((c, i) => {\n        if (!largeSellsByCandle[i]) return { value: [i, null], symbolSize: 0 };\n        const size = Math.min(22, Math.max(8, Math.log10(largeSellsByCandle[i]) * 6));\n        return { value: [i, c.high * 1.006], symbolSize: size };\n      })\n    }\n  ]\n};",
         "google": {
           "callback": "gmapReady",
           "key": ""
@@ -549,7 +549,7 @@
           }
         }
       ],
-      "title": "ICP/USDT — 200-Tick + NP→Exchange Overlay",
+      "title": "ICP/USDT \u2014 200-Tick + NP\u2192Exchange Overlay",
       "type": "volkovlabs-echarts-panel"
     },
     {
@@ -577,7 +577,7 @@
         },
         "editorMode": "code",
         "gaode": "",
-        "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\nconst TICK_SIZE  = 200;\nconst POC_WINDOW = 1000;\nconst BUCKET     = 0.01;\nconst BULL = '#26a69a';\nconst BEAR = '#ef5350';\nconst GREY = '#888888';\n\n// 200-Tick Kerzen\nconst candles = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  let high = priceArr[start], low = priceArr[start], vol = 0;\n  for (let j = start; j < end; j++) {\n    if (priceArr[j] > high) high = priceArr[j];\n    if (priceArr[j] < low)  low  = priceArr[j];\n    vol += qtyArr[j];\n  }\n  candles.push({\n    tsMs:   tsMsArr[start],\n    open:   priceArr[start],\n    high, low,\n    close:  priceArr[end - 1],\n    vol,\n    isLive: (end - start) < TICK_SIZE\n  });\n}\nif (!candles.length) return {};\n\n// Rollender POC: für jede Kerze die letzten 1000 Ticks bucketen\nconst pocLine = candles.map((_, ci) => {\n  const endTick   = Math.min((ci + 1) * TICK_SIZE, tsMsArr.length);\n  const startTick = Math.max(0, endTick - POC_WINDOW);\n  const buckets   = {};\n  for (let t = startTick; t < endTick; t++) {\n    const key = (Math.floor(priceArr[t] / BUCKET) * BUCKET).toFixed(3);\n    buckets[key] = (buckets[key] || 0) + qtyArr[t];\n  }\n  let maxVol = 0, poc = null;\n  for (const [k, v] of Object.entries(buckets)) {\n    if (v > maxVol) { maxVol = v; poc = +(+k + BUCKET / 2).toFixed(4); }\n  }\n  return poc;\n});\n\n// CVD: kumulierter Netto-Kaufdruck (bm=0 → aggressiver Kauf, bm=1 → aggressiver Verkauf)\nlet cvdRunning = 0;\nconst cvdLine = candles.map((_, ci) => {\n  const startTick = ci * TICK_SIZE;\n  const endTick   = Math.min(startTick + TICK_SIZE, tsMsArr.length);\n  for (let t = startTick; t < endTick; t++) {\n    cvdRunning += bmArr[t] === 0 ? qtyArr[t] : -qtyArr[t];\n  }\n  return +cvdRunning.toFixed(1);\n});\n\nconst labels = candles.map(c => new Date(c.tsMs).toISOString().slice(11, 16));\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: [\n    { left: 70, right: 75, top: 10, bottom: 80 },\n    { left: 70, right: 20, top: '72%', bottom: 40 }\n  ],\n  xAxis: [\n    { type: 'category', data: labels, gridIndex: 0,\n      axisLine: { lineStyle: { color: '#555' } },\n      axisLabel: { color: '#aaa', fontSize: 10 },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true },\n    { type: 'category', data: labels, gridIndex: 1,\n      axisLabel: { show: false },\n      axisLine: { lineStyle: { color: '#555' } },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true }\n  ],\n  yAxis: [\n    { scale: true, gridIndex: 0,\n      axisLabel: { color: '#aaa', fontSize: 11, formatter: v => v.toFixed(3) },\n      splitLine: { lineStyle: { color: '#2a2a2a' } },\n      axisLine: { show: false }, axisTick: { show: false } },\n    { scale: true, gridIndex: 1,\n      axisLabel: { color: '#6b7280', fontSize: 10,\n        formatter: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0) },\n      splitLine: { lineStyle: { color: '#1a2a3a', type: 'dashed' } },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 3 }\n    ,\n    { scale: true, gridIndex: 0, position: 'right',\n      axisLabel: { color: '#64B5F6', fontSize: 10,\n        formatter: v => {\n          const abs = Math.abs(v);\n          const s   = v < 0 ? '-' : '';\n          return abs >= 1000 ? s + (abs/1000).toFixed(0) + 'k' : s + abs.toFixed(0);\n        }\n      },\n      splitLine: { show: false },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 4 }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    { type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 20,\n      start: 50, end: 100,\n      textStyle: { color: '#888' }, borderColor: '#444',\n      fillerColor: 'rgba(80,80,80,0.3)',\n      handleStyle: { color: '#777', borderColor: '#555' } }\n  ],\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 11 },\n    formatter: params => {\n      const cp = params.find(p => p.seriesName === 'ICP 200-Tick');\n      if (!cp) return '';\n      const i = cp.dataIndex;\n      const c = candles[i];\n      if (!c) return '';\n      const chg   = ((c.close - c.open) / c.open * 100).toFixed(2);\n      const color = c.close >= c.open ? BULL : BEAR;\n      const poc   = pocLine[i];\n      return '<b>' + new Date(c.tsMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</b><br/>'\n        + 'O: ' + c.open.toFixed(4) + '  H: ' + c.high.toFixed(4) + '<br/>'\n        + 'L: ' + c.low.toFixed(4)  + '  C: ' + c.close.toFixed(4) + '<br/>'\n        + '<span style=\"color:' + color + '\">' + chg + '%</span>'\n        + '  Vol: ' + (c.vol / 1000).toFixed(1) + 'k ICP'\n        + (poc !== null ? '<br/><span style=\"color:#f59e0b\">POC: $' + poc.toFixed(3) + '</span>' : '')\n        + '<br/><span style=\"color:#64B5F6\">CVD: ' + (cvdLine[i] >= 0 ? '+' : '') + (cvdLine[i]/1000).toFixed(1) + 'k ICP</span>';\n    }\n  },\n  series: [\n    { name: 'ICP 200-Tick', type: 'candlestick',\n      xAxisIndex: 0, yAxisIndex: 0,\n      itemStyle: { color: BULL, color0: BEAR, borderColor: BULL, borderColor0: BEAR },\n      data: candles.map(c => c.isLive\n        ? { value: [c.open, c.close, c.low, c.high],\n            itemStyle: { color: GREY, color0: GREY, borderColor: '#999', borderColor0: '#999' } }\n        : [c.open, c.close, c.low, c.high]\n      )\n    },\n    { name: 'POC 1000-Tick', type: 'line',\n      xAxisIndex: 0, yAxisIndex: 0,\n      step: 'end',\n      data: pocLine.map(p => p === null ? '-' : p),\n      lineStyle: { color: '#f59e0b', width: 1.5 },\n      symbol: 'none',\n      z: 10\n    },\n    { name: 'CVD', type: 'line',\n      xAxisIndex: 0, yAxisIndex: 2,\n      data: cvdLine,\n      lineStyle: { color: '#64B5F6', width: 1.5 },\n      areaStyle: {\n        color: {\n          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,\n          colorStops: [\n            { offset: 0, color: 'rgba(100,181,246,0.18)' },\n            { offset: 1, color: 'rgba(100,181,246,0.0)' }\n          ]\n        }\n      },\n      symbol: 'none', z: 5\n    },\n    { name: 'Volumen', type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: candles.map(c => ({\n        value: c.vol,\n        itemStyle: { color: c.close >= c.open ? BULL : BEAR, opacity: 0.6 }\n      })),\n      barMaxWidth: 20\n    }\n  ]\n};",
+        "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\nconst TICK_SIZE  = 200;\nconst POC_WINDOW = 1000;\nconst BUCKET     = 0.01;\nconst BULL = '#26a69a';\nconst BEAR = '#ef5350';\nconst GREY = '#888888';\n\n// 200-Tick Kerzen\nconst candles = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  let high = priceArr[start], low = priceArr[start], vol = 0;\n  for (let j = start; j < end; j++) {\n    if (priceArr[j] > high) high = priceArr[j];\n    if (priceArr[j] < low)  low  = priceArr[j];\n    vol += qtyArr[j];\n  }\n  candles.push({\n    tsMs:   tsMsArr[start],\n    open:   priceArr[start],\n    high, low,\n    close:  priceArr[end - 1],\n    vol,\n    isLive: (end - start) < TICK_SIZE\n  });\n}\nif (!candles.length) return {};\n\n// Rollender POC: f\u00fcr jede Kerze die letzten 1000 Ticks bucketen\nconst pocLine = candles.map((_, ci) => {\n  const endTick   = Math.min((ci + 1) * TICK_SIZE, tsMsArr.length);\n  const startTick = Math.max(0, endTick - POC_WINDOW);\n  const buckets   = {};\n  for (let t = startTick; t < endTick; t++) {\n    const key = (Math.floor(priceArr[t] / BUCKET) * BUCKET).toFixed(3);\n    buckets[key] = (buckets[key] || 0) + qtyArr[t];\n  }\n  let maxVol = 0, poc = null;\n  for (const [k, v] of Object.entries(buckets)) {\n    if (v > maxVol) { maxVol = v; poc = +(+k + BUCKET / 2).toFixed(4); }\n  }\n  return poc;\n});\n\n// CVD: kumulierter Netto-Kaufdruck (bm=0 \u2192 aggressiver Kauf, bm=1 \u2192 aggressiver Verkauf)\nlet cvdRunning = 0;\nconst cvdLine = candles.map((_, ci) => {\n  const startTick = ci * TICK_SIZE;\n  const endTick   = Math.min(startTick + TICK_SIZE, tsMsArr.length);\n  for (let t = startTick; t < endTick; t++) {\n    cvdRunning += bmArr[t] === 0 ? qtyArr[t] : -qtyArr[t];\n  }\n  return +cvdRunning.toFixed(1);\n});\n\nconst labels = candles.map(c => new Date(c.tsMs).toISOString().slice(11, 16));\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: [\n    { left: 70, right: 75, top: 10, bottom: 80 },\n    { left: 70, right: 20, top: '72%', bottom: 40 }\n  ],\n  xAxis: [\n    { type: 'category', data: labels, gridIndex: 0,\n      axisLine: { lineStyle: { color: '#555' } },\n      axisLabel: { color: '#aaa', fontSize: 10 },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true },\n    { type: 'category', data: labels, gridIndex: 1,\n      axisLabel: { show: false },\n      axisLine: { lineStyle: { color: '#555' } },\n      axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true }\n  ],\n  yAxis: [\n    { scale: true, gridIndex: 0,\n      axisLabel: { color: '#aaa', fontSize: 11, formatter: v => v.toFixed(3) },\n      splitLine: { lineStyle: { color: '#2a2a2a' } },\n      axisLine: { show: false }, axisTick: { show: false } },\n    { scale: true, gridIndex: 1,\n      axisLabel: { color: '#6b7280', fontSize: 10,\n        formatter: v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0) },\n      splitLine: { lineStyle: { color: '#1a2a3a', type: 'dashed' } },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 3 }\n    ,\n    { scale: true, gridIndex: 0, position: 'right',\n      axisLabel: { color: '#64B5F6', fontSize: 10,\n        formatter: v => {\n          const abs = Math.abs(v);\n          const s   = v < 0 ? '-' : '';\n          return abs >= 1000 ? s + (abs/1000).toFixed(0) + 'k' : s + abs.toFixed(0);\n        }\n      },\n      splitLine: { show: false },\n      axisLine: { show: false }, axisTick: { show: false },\n      splitNumber: 4 }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    { type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 20,\n      start: 50, end: 100,\n      textStyle: { color: '#888' }, borderColor: '#444',\n      fillerColor: 'rgba(80,80,80,0.3)',\n      handleStyle: { color: '#777', borderColor: '#555' } }\n  ],\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 11 },\n    formatter: params => {\n      const cp = params.find(p => p.seriesName === 'ICP 200-Tick');\n      if (!cp) return '';\n      const i = cp.dataIndex;\n      const c = candles[i];\n      if (!c) return '';\n      const chg   = ((c.close - c.open) / c.open * 100).toFixed(2);\n      const color = c.close >= c.open ? BULL : BEAR;\n      const poc   = pocLine[i];\n      return '<b>' + new Date(c.tsMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</b><br/>'\n        + 'O: ' + c.open.toFixed(4) + '  H: ' + c.high.toFixed(4) + '<br/>'\n        + 'L: ' + c.low.toFixed(4)  + '  C: ' + c.close.toFixed(4) + '<br/>'\n        + '<span style=\"color:' + color + '\">' + chg + '%</span>'\n        + '  Vol: ' + (c.vol / 1000).toFixed(1) + 'k ICP'\n        + (poc !== null ? '<br/><span style=\"color:#f59e0b\">POC: $' + poc.toFixed(3) + '</span>' : '')\n        + '<br/><span style=\"color:#64B5F6\">CVD: ' + (cvdLine[i] >= 0 ? '+' : '') + (cvdLine[i]/1000).toFixed(1) + 'k ICP</span>';\n    }\n  },\n  series: [\n    { name: 'ICP 200-Tick', type: 'candlestick',\n      xAxisIndex: 0, yAxisIndex: 0,\n      itemStyle: { color: BULL, color0: BEAR, borderColor: BULL, borderColor0: BEAR },\n      data: candles.map(c => c.isLive\n        ? { value: [c.open, c.close, c.low, c.high],\n            itemStyle: { color: GREY, color0: GREY, borderColor: '#999', borderColor0: '#999' } }\n        : [c.open, c.close, c.low, c.high]\n      )\n    },\n    { name: 'POC 1000-Tick', type: 'line',\n      xAxisIndex: 0, yAxisIndex: 0,\n      step: 'end',\n      data: pocLine.map(p => p === null ? '-' : p),\n      lineStyle: { color: '#f59e0b', width: 1.5 },\n      symbol: 'none',\n      z: 10\n    },\n    { name: 'CVD', type: 'line',\n      xAxisIndex: 0, yAxisIndex: 2,\n      data: cvdLine,\n      lineStyle: { color: '#64B5F6', width: 1.5 },\n      areaStyle: {\n        color: {\n          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,\n          colorStops: [\n            { offset: 0, color: 'rgba(100,181,246,0.18)' },\n            { offset: 1, color: 'rgba(100,181,246,0.0)' }\n          ]\n        }\n      },\n      symbol: 'none', z: 5\n    },\n    { name: 'Volumen', type: 'bar',\n      xAxisIndex: 1, yAxisIndex: 1,\n      data: candles.map(c => ({\n        value: c.vol,\n        itemStyle: { color: c.close >= c.open ? BULL : BEAR, opacity: 0.6 }\n      })),\n      barMaxWidth: 20\n    }\n  ]\n};",
         "google": "",
         "map": "none",
         "renderer": "canvas",
@@ -605,7 +605,7 @@
           "refId": "A"
         }
       ],
-      "title": "ICP/USDT — 200-Tick Candles + Volumen + CVD (POC 1000-Tick)",
+      "title": "ICP/USDT \u2014 200-Tick Candles + Volumen + CVD (POC 1000-Tick)",
       "transformations": [],
       "transparent": false,
       "type": "volkovlabs-echarts-panel"
@@ -716,7 +716,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Iceberg ⚠"
+              "options": "Iceberg \u26a0"
             },
             "properties": [
               {
@@ -774,7 +774,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "time_series",
-          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= $__timeFrom() AND o.ts <= $__timeTo() GROUP BY 1), with_signal AS (SELECT time, ask_depth, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, ask_depth AS \"Ask Tiefe (ICP)\", spot_vol AS \"Spot Vol (ICP)\", CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN ask_depth ELSE NULL END AS \"Iceberg ⚠\" FROM with_signal ORDER BY time",
+          "rawSql": "WITH minute_data AS (SELECT date_trunc('minute', o.ts) AS time, ROUND(AVG(o.ask_depth_icp)::numeric, 0) AS ask_depth, COALESCE(ROUND(SUM(s.quantity_icp)::numeric, 0), 0) AS spot_vol FROM ob_snapshots o LEFT JOIN spot_trades s ON date_trunc('minute', s.ts) = date_trunc('minute', o.ts) WHERE o.ts >= $__timeFrom() AND o.ts <= $__timeTo() GROUP BY 1), with_signal AS (SELECT time, ask_depth, spot_vol, LAG(ask_depth) OVER (ORDER BY time) AS prev_ask, AVG(spot_vol) OVER (ORDER BY time ROWS BETWEEN 60 PRECEDING AND CURRENT ROW) AS avg_vol FROM minute_data) SELECT time, ask_depth AS \"Ask Tiefe (ICP)\", spot_vol AS \"Spot Vol (ICP)\", CASE WHEN prev_ask IS NOT NULL AND ABS(ask_depth - prev_ask) / NULLIF(prev_ask, 0) < 0.05 AND spot_vol > GREATEST(avg_vol * 1.5, 100) THEN ask_depth ELSE NULL END AS \"Iceberg \u26a0\" FROM with_signal ORDER BY time",
           "refId": "A"
         }
       ],
@@ -1193,7 +1193,7 @@
         "h": 8,
         "w": 14,
         "x": 0,
-        "y": 56
+        "y": 65
       },
       "id": 602,
       "options": {
@@ -1259,7 +1259,7 @@
           }
         }
       ],
-      "title": "Funding Rate — ICPUSDT Perp (Binance + HL)",
+      "title": "Funding Rate \u2014 ICPUSDT Perp (Binance + HL)",
       "type": "timeseries"
     },
     {
@@ -1505,7 +1505,7 @@
         "h": 8,
         "w": 10,
         "x": 14,
-        "y": 56
+        "y": 65
       },
       "id": 603,
       "options": {
@@ -1588,7 +1588,7 @@
           }
         }
       ],
-      "title": "Open Interest — ICPUSDT Perp (Binance + HL)",
+      "title": "Open Interest \u2014 ICPUSDT Perp (Binance + HL)",
       "type": "timeseries"
     },
     {
@@ -1701,7 +1701,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 80
       },
       "id": 403,
       "options": {
@@ -1742,7 +1742,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 90
       },
       "id": 606,
       "panels": [
@@ -1903,7 +1903,7 @@
                 "uid": "mount_midas_pg"
               },
               "format": "table",
-              "rawSql": "WITH sl AS (\n  SELECT trigger_mint, trigger_wallet, trigger_ob_thin, trigger_threshold, details\n  FROM signal_log ORDER BY ts DESC LIMIT 1\n)\nSELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\",\n  ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\"\nFROM (\n  SELECT '① Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle,\n    COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h'\n  UNION ALL\n  SELECT '② Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h'\n  UNION ALL\n  SELECT '③ Aggregator aktiv', '> 0 (6h)',\n    ((sl.details->>'trigger_aggregator')::boolean)::int::numeric,\n    (sl.details->>'trigger_aggregator')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '④ OB Bid Depth', '< 50.000 ICP',\n    (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1),\n    (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000\n  UNION ALL\n  SELECT '⑤ L/S Ratio', '> 5,0',\n    ROUND((sl.details->>'ls_ratio')::numeric, 3),\n    (sl.details->>'ls_ratio')::numeric > 5\n  FROM sl\n  UNION ALL\n  SELECT '⑥ Perp/Spot Ratio', '> 3,0',\n    ROUND((sl.details->>'perp_spot')::numeric, 3),\n    (sl.details->>'perp_spot')::numeric > 3\n  FROM sl\n  UNION ALL\n  SELECT '⑦ Sell-Ratio > 75%', '> 75%',\n    ROUND((sl.details->>'sell_ratio_pct')::numeric, 1),\n    sl.trigger_threshold\n  FROM sl\n  UNION ALL\n  SELECT '⑧ Hop-2/3-Spike', 'Spike > 1.5×',\n    ((sl.details->>'trigger_hop_spike')::boolean)::int::numeric,\n    (sl.details->>'trigger_hop_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '⑨ CVD-Divergenz', 'Preis↑/CVD↓',\n    ROUND((sl.details->>'cvd_price_chg_pct')::numeric, 2),\n    (sl.details->>'trigger_cvd_div')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '⑩ Large Ask Sell', '≥3×>6k/30min',\n    ((sl.details->>'trigger_large_sell')::boolean)::int::numeric,\n    (sl.details->>'trigger_large_sell')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '⑪ Funding Spike', '> 0.0005',\n    ROUND(ABS((sl.details->>'funding_rate_pct')::numeric), 4),\n    (sl.details->>'trigger_funding_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '⑫ Liq-Sweep (Long>5×Short)', '> 5× (1h)',\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    )::numeric,\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    ) > 5\n) sub\nORDER BY 1",
+              "rawSql": "WITH sl AS (\n  SELECT trigger_mint, trigger_wallet, trigger_ob_thin, trigger_threshold, details\n  FROM signal_log ORDER BY ts DESC LIMIT 1\n)\nSELECT trigger_name AS \"Trigger\", schwelle AS \"Schwelle\",\n  ROUND(wert::numeric, 2) AS \"Ist-Wert\", aktiv::int AS \"Status\"\nFROM (\n  SELECT '\u2460 Minting Event' AS trigger_name, '> 0 (48h)' AS schwelle,\n    COUNT(*)::numeric AS wert, (COUNT(*) > 0) AS aktiv\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '48h'\n  UNION ALL\n  SELECT '\u2461 Wallet Hop 0', '> 0 (6h)', COUNT(*)::numeric, COUNT(*) > 0\n  FROM wallet_movements WHERE hop_depth=0 AND ts >= NOW()-INTERVAL '6h'\n  UNION ALL\n  SELECT '\u2462 Aggregator aktiv', '> 0 (6h)',\n    ((sl.details->>'trigger_aggregator')::boolean)::int::numeric,\n    (sl.details->>'trigger_aggregator')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2463 OB Bid Depth', '< 50.000 ICP',\n    (SELECT ROUND(bid_depth_icp::numeric,0) FROM ob_snapshots ORDER BY ts DESC LIMIT 1),\n    (SELECT bid_depth_icp FROM ob_snapshots ORDER BY ts DESC LIMIT 1) < 50000\n  UNION ALL\n  SELECT '\u2464 L/S Ratio', '> 5,0',\n    ROUND((sl.details->>'ls_ratio')::numeric, 3),\n    (sl.details->>'ls_ratio')::numeric > 5\n  FROM sl\n  UNION ALL\n  SELECT '\u2465 Perp/Spot Ratio', '> 3,0',\n    ROUND((sl.details->>'perp_spot')::numeric, 3),\n    (sl.details->>'perp_spot')::numeric > 3\n  FROM sl\n  UNION ALL\n  SELECT '\u2466 Sell-Ratio > 75%', '> 75%',\n    ROUND((sl.details->>'sell_ratio_pct')::numeric, 1),\n    sl.trigger_threshold\n  FROM sl\n  UNION ALL\n  SELECT '\u2467 Hop-2/3-Spike', 'Spike > 1.5\u00d7',\n    ((sl.details->>'trigger_hop_spike')::boolean)::int::numeric,\n    (sl.details->>'trigger_hop_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2468 CVD-Divergenz', 'Preis\u2191/CVD\u2193',\n    ROUND((sl.details->>'cvd_price_chg_pct')::numeric, 2),\n    (sl.details->>'trigger_cvd_div')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u2469 Large Ask Sell', '\u22653\u00d7>6k/30min',\n    ((sl.details->>'trigger_large_sell')::boolean)::int::numeric,\n    (sl.details->>'trigger_large_sell')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246a Funding Spike', '> 0.0005',\n    ROUND(ABS((sl.details->>'funding_rate_pct')::numeric), 4),\n    (sl.details->>'trigger_funding_spike')::boolean\n  FROM sl\n  UNION ALL\n  SELECT '\u246b Liq-Sweep (Long>5\u00d7Short)', '> 5\u00d7 (1h)',\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    )::numeric,\n    COALESCE(\n      (SELECT SUM(quantity_icp) FILTER (WHERE side='long') / NULLIF(SUM(quantity_icp) FILTER (WHERE side='short'), 0)\n       FROM liquidation_events WHERE ts >= NOW()-INTERVAL '1h'),\n      0\n    ) > 5\n) sub\nORDER BY 1",
               "refId": "A"
             }
           ],
@@ -1935,7 +1935,7 @@
               "key": "",
               "plugin": "AMap.Scale,AMap.ToolBar"
             },
-            "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst hopArr = getVals(s0.fields.find(f => f.name === 'hop'));\nconst icpArr = getVals(s0.fields.find(f => f.name === 'icp'));\n\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\nconst COLORS = ['#26a69a', '#4db6ac', '#ffb74d', '#ef5350'];\nconst LABELS = {\n  'Hop 0': 'Hop 0 — direkt',\n  'Hop 1': 'Hop 1 — Zwischen',\n  'Hop 2': 'Hop 2 — Zwischenstufe',\n  'Hop 3': 'Hop 3 — Ziel'\n};\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: { left: 120, right: 70, top: 10, bottom: 30 },\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'shadow' },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const p = params[0];\n      return '<b>' + (LABELS[p.name] || p.name) + '</b><br/>Total: <b>' + fmtICP(p.value) + ' ICP</b>';\n    }\n  },\n  xAxis: {\n    type: 'value',\n    axisLabel: { color: '#aaa', fontSize: 10, formatter: v => fmtICP(v) },\n    splitLine: { lineStyle: { color: '#2a2a2a' } },\n    axisLine: { show: false },\n    axisTick: { show: false }\n  },\n  yAxis: {\n    type: 'category',\n    data: hopArr,\n    axisLabel: {\n      color: '#aaa', fontSize: 11,\n      formatter: v => LABELS[v] || v\n    },\n    axisLine: { lineStyle: { color: '#555' } },\n    axisTick: { show: false },\n    splitLine: { show: false }\n  },\n  series: [{\n    type: 'bar',\n    barMaxWidth: 28,\n    data: icpArr.map((v, i) => ({\n      value: v,\n      itemStyle: { color: COLORS[i % COLORS.length] },\n      label: {\n        show: true,\n        position: 'right',\n        formatter: p => fmtICP(p.value),\n        color: '#ccc',\n        fontSize: 10\n      }\n    }))\n  }]\n};",
+            "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\n\nconst getVals = f => {\n  if (!f) return [];\n  const v = f.values;\n  if (Array.isArray(v)) return v;\n  if (typeof v.toArray === 'function') return v.toArray();\n  return Array.from(v);\n};\n\nconst hopArr = getVals(s0.fields.find(f => f.name === 'hop'));\nconst icpArr = getVals(s0.fields.find(f => f.name === 'icp'));\n\nconst fmtICP = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0);\nconst COLORS = ['#26a69a', '#4db6ac', '#ffb74d', '#ef5350'];\nconst LABELS = {\n  'Hop 0': 'Hop 0 \u2014 direkt',\n  'Hop 1': 'Hop 1 \u2014 Zwischen',\n  'Hop 2': 'Hop 2 \u2014 Zwischenstufe',\n  'Hop 3': 'Hop 3 \u2014 Ziel'\n};\n\nreturn {\n  backgroundColor: 'transparent',\n  animation: false,\n  grid: { left: 120, right: 70, top: 10, bottom: 30 },\n  tooltip: {\n    trigger: 'axis',\n    axisPointer: { type: 'shadow' },\n    backgroundColor: 'rgba(20,20,20,0.92)',\n    borderColor: '#444',\n    textStyle: { color: '#ddd', fontSize: 12 },\n    formatter: params => {\n      const p = params[0];\n      return '<b>' + (LABELS[p.name] || p.name) + '</b><br/>Total: <b>' + fmtICP(p.value) + ' ICP</b>';\n    }\n  },\n  xAxis: {\n    type: 'value',\n    axisLabel: { color: '#aaa', fontSize: 10, formatter: v => fmtICP(v) },\n    splitLine: { lineStyle: { color: '#2a2a2a' } },\n    axisLine: { show: false },\n    axisTick: { show: false }\n  },\n  yAxis: {\n    type: 'category',\n    data: hopArr,\n    axisLabel: {\n      color: '#aaa', fontSize: 11,\n      formatter: v => LABELS[v] || v\n    },\n    axisLine: { lineStyle: { color: '#555' } },\n    axisTick: { show: false },\n    splitLine: { show: false }\n  },\n  series: [{\n    type: 'bar',\n    barMaxWidth: 28,\n    data: icpArr.map((v, i) => ({\n      value: v,\n      itemStyle: { color: COLORS[i % COLORS.length] },\n      label: {\n        show: true,\n        position: 'right',\n        formatter: p => fmtICP(p.value),\n        color: '#ccc',\n        fontSize: 10\n      }\n    }))\n  }]\n};",
             "google": {
               "callback": "gmapReady",
               "key": ""
@@ -1971,7 +1971,7 @@
               }
             }
           ],
-          "title": "NP Wallet Bewegungen — letzte 10 Tage (>100 ICP)",
+          "title": "NP Wallet Bewegungen \u2014 letzte 10 Tage (>100 ICP)",
           "type": "volkovlabs-echarts-panel"
         },
         {
@@ -2125,7 +2125,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 91
       },
       "id": 607,
       "title": "Korrelation & Edge",
@@ -2142,7 +2142,7 @@
             "mode": "thresholds"
           },
           "decimals": 3,
-          "displayName": "r (Sell→Preis)",
+          "displayName": "r (Sell\u2192Preis)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2167,7 +2167,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 83
+        "y": 92
       },
       "id": 21,
       "options": {
@@ -2199,7 +2199,7 @@
           "refId": "A"
         }
       ],
-      "title": "Korrelation r (Sell→Preis)",
+      "title": "Korrelation r (Sell\u2192Preis)",
       "type": "stat"
     },
     {
@@ -2213,7 +2213,7 @@
             "mode": "thresholds"
           },
           "decimals": 3,
-          "displayName": "r (OI→Preis)",
+          "displayName": "r (OI\u2192Preis)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2238,7 +2238,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 83
+        "y": 92
       },
       "id": 22,
       "options": {
@@ -2306,7 +2306,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 83
+        "y": 92
       },
       "id": 23,
       "options": {
@@ -2352,7 +2352,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "displayName": "Score ≥ 4 Events",
+          "displayName": "Score \u2265 4 Events",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2377,7 +2377,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 83
+        "y": 92
       },
       "id": 24,
       "options": {
@@ -2418,7 +2418,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 87
+        "y": 96
       },
       "id": 608,
       "title": "NP-Analyse",
@@ -2557,7 +2557,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 97
       },
       "id": 301,
       "options": {
@@ -2578,7 +2578,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT\n    COALESCE(np.name, SUBSTRING(perf.provider_principal, 1, 20) || '…') AS \"Node Provider\",\n    perf.provider_principal AS principal,\n    COUNT(DISTINCT perf.node_id) AS \"Nodes\",\n    AVG(perf.failure_rate_pct)::float8 AS \"Failure-Rate %\"\nFROM np_performance perf\nLEFT JOIN np_providers np ON np.principal = perf.provider_principal\nWHERE perf.ts >= NOW() - INTERVAL '35 days'\n  AND perf.failure_rate_pct IS NOT NULL\n  AND perf.failure_rate_pct > 0\nGROUP BY perf.provider_principal, np.name\nORDER BY \"Failure-Rate %\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n    COALESCE(np.name, SUBSTRING(perf.provider_principal, 1, 20) || '\u2026') AS \"Node Provider\",\n    perf.provider_principal AS principal,\n    COUNT(DISTINCT perf.node_id) AS \"Nodes\",\n    AVG(perf.failure_rate_pct)::float8 AS \"Failure-Rate %\"\nFROM np_performance perf\nLEFT JOIN np_providers np ON np.principal = perf.provider_principal\nWHERE perf.ts >= NOW() - INTERVAL '35 days'\n  AND perf.failure_rate_pct IS NOT NULL\n  AND perf.failure_rate_pct > 0\nGROUP BY perf.provider_principal, np.name\nORDER BY \"Failure-Rate %\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -2681,7 +2681,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 98
+        "y": 107
       },
       "id": 302,
       "options": {
@@ -2713,7 +2713,7 @@
           "refId": "A"
         }
       ],
-      "title": "NP-Outflow nach Ziel — monatlich",
+      "title": "NP-Outflow nach Ziel \u2014 monatlich",
       "type": "timeseries"
     },
     {
@@ -2721,7 +2721,7 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
-      "description": "Größte Empfänger ohne Exchange-Label. ICP Dashboard aufrufen und als Exchange/Aggregator/Staking klassifizieren.",
+      "description": "Gr\u00f6\u00dfte Empf\u00e4nger ohne Exchange-Label. ICP Dashboard aufrufen und als Exchange/Aggregator/Staking klassifizieren.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -2790,7 +2790,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 98
+        "y": 107
       },
       "id": 304,
       "options": {
@@ -2815,7 +2815,7 @@
           "refId": "A"
         }
       ],
-      "title": "Top Destinations — unbekannte Empfänger (manuell verifizieren)",
+      "title": "Top Destinations \u2014 unbekannte Empf\u00e4nger (manuell verifizieren)",
       "type": "table"
     },
     {
@@ -2823,7 +2823,7 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
-      "description": "Principals die von ≥5 NPs Transfers empfangen haben. Verifizieren und in exchange_whitelist.json eintragen.",
+      "description": "Principals die von \u22655 NPs Transfers empfangen haben. Verifizieren und in exchange_whitelist.json eintragen.",
       "fieldConfig": {
         "defaults": {
           "unit": "none"
@@ -2847,7 +2847,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 102
+        "y": 111
       },
       "id": 305,
       "options": {
@@ -2866,7 +2866,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT\n  wm.to_principal AS \"Account ID\",\n  COUNT(DISTINCT np.principal) AS \"NPs\",\n  ROUND(SUM(wm.amount_icp)::numeric, 0)::float8 AS \"ICP\",\n  COALESCE(wl.label, '—') AS \"Label\"\nFROM wallet_movements wm\nJOIN np_providers np ON np.principal = wm.from_principal\nLEFT JOIN np_wallet_labels wl ON wl.account_id = wm.to_principal\nWHERE wm.hop_depth = 0\nGROUP BY wm.to_principal, wl.label\nHAVING COUNT(DISTINCT np.principal) >= 3\nORDER BY \"NPs\" DESC, \"ICP\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n  wm.to_principal AS \"Account ID\",\n  COUNT(DISTINCT np.principal) AS \"NPs\",\n  ROUND(SUM(wm.amount_icp)::numeric, 0)::float8 AS \"ICP\",\n  COALESCE(wl.label, '\u2014') AS \"Label\"\nFROM wallet_movements wm\nJOIN np_providers np ON np.principal = wm.from_principal\nLEFT JOIN np_wallet_labels wl ON wl.account_id = wm.to_principal\nWHERE wm.hop_depth = 0\nGROUP BY wm.to_principal, wl.label\nHAVING COUNT(DISTINCT np.principal) >= 3\nORDER BY \"NPs\" DESC, \"ICP\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -2918,7 +2918,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 112
+        "y": 121
       },
       "id": 303,
       "options": {
@@ -2942,7 +2942,7 @@
           "refId": "A"
         }
       ],
-      "title": "Exchange-Flow % — monatlich",
+      "title": "Exchange-Flow % \u2014 monatlich",
       "type": "timeseries"
     },
     {
@@ -3053,7 +3053,7 @@
         "h": 7,
         "w": 14,
         "x": 0,
-        "y": 64
+        "y": 73
       },
       "id": 610,
       "options": {
@@ -3083,7 +3083,7 @@
           "refId": "A"
         }
       ],
-      "title": "Predicted Funding — Cross-Exchange Vergleich (ICP)",
+      "title": "Predicted Funding \u2014 Cross-Exchange Vergleich (ICP)",
       "type": "timeseries"
     },
     {
@@ -3127,7 +3127,7 @@
         "h": 3,
         "w": 5,
         "x": 14,
-        "y": 64
+        "y": 73
       },
       "id": 611,
       "options": {
@@ -3201,7 +3201,7 @@
         "h": 3,
         "w": 5,
         "x": 19,
-        "y": 64
+        "y": 73
       },
       "id": 612,
       "options": {
@@ -3275,7 +3275,7 @@
         "h": 4,
         "w": 5,
         "x": 14,
-        "y": 67
+        "y": 76
       },
       "id": 613,
       "options": {
@@ -3345,7 +3345,7 @@
         "h": 4,
         "w": 5,
         "x": 19,
-        "y": 67
+        "y": 76
       },
       "id": 614,
       "options": {
@@ -3381,7 +3381,7 @@
     {
       "id": 616,
       "type": "timeseries",
-      "title": "Liq Flow — OKX ICP/USDT Perp",
+      "title": "Liq Flow \u2014 OKX ICP/USDT Perp",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
@@ -3535,6 +3535,336 @@
         }
       },
       "transformations": []
+    },
+    {
+      "id": 620,
+      "type": "row",
+      "title": "Institutional Flow \u2014 TWAP Detection",
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "panels": [],
+      "targets": []
+    },
+    {
+      "id": 617,
+      "type": "timeseries",
+      "title": "TWAP Activity \u2014 Institutional Flow (Spot)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 20,
+        "x": 0,
+        "y": 57
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", quantity_icp::float8 AS \"Buy TWAP (ICP)\"\nFROM scored\nWHERE NOT is_buyer_maker AND seq_score >= 3\nORDER BY ts",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    LAG(ts)           OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (PARTITION BY is_buyer_maker ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (PARTITION BY is_buyer_maker ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500 AND $__timeFilter(ts)\n),\nflagged AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    CASE WHEN gap_secs BETWEEN 15 AND 75\n          AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n         THEN 1 ELSE 0 END AS is_twap\n  FROM large_trades WHERE gap_secs IS NOT NULL\n),\nscored AS (\n  SELECT ts, quantity_icp, is_buyer_maker,\n    SUM(is_twap) OVER (\n      PARTITION BY is_buyer_maker ORDER BY ts\n      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n    ) AS seq_score\n  FROM flagged\n)\nSELECT ts AS \"time\", (-quantity_icp)::float8 AS \"Sell TWAP (ICP)\"\nFROM scored\nWHERE is_buyer_maker AND seq_score >= 3\nORDER BY ts",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "barAlignment": 0,
+            "lineWidth": 0,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 8
+          },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Buy TWAP (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#66BB6A",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sell TWAP (ICP)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#EF5350",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 618,
+      "type": "stat",
+      "title": "Buy TWAP Score",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 57
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND NOT is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Buy TWAP Score\"\nFROM flagged",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "\u2014",
+                  "color": "#546E7A"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "M\u00f6glich (1/3)"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "Wahrsch. (2/3)"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "AKTIV (3/3)"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#546E7A",
+                "value": null
+              },
+              {
+                "color": "#FFB300",
+                "value": 2
+              },
+              {
+                "color": "#66BB6A",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 619,
+      "type": "stat",
+      "title": "Sell TWAP Score",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 61
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH large_trades AS (\n  SELECT ts, quantity_icp,\n    LAG(ts)           OVER (ORDER BY ts) AS prev_ts,\n    LAG(quantity_icp) OVER (ORDER BY ts) AS prev_qty,\n    EXTRACT(epoch FROM (ts - LAG(ts) OVER (ORDER BY ts))) AS gap_secs\n  FROM spot_trades\n  WHERE quantity_icp > 1500\n    AND is_buyer_maker\n    AND ts >= NOW() - INTERVAL '20 minutes'\n),\nflagged AS (\n  SELECT CASE WHEN gap_secs BETWEEN 15 AND 75\n               AND ABS(quantity_icp - prev_qty) / NULLIF(prev_qty, 0) < 0.50\n              THEN 1 ELSE 0 END AS hit\n  FROM large_trades WHERE gap_secs IS NOT NULL\n)\nSELECT NOW() AS \"time\", COALESCE(SUM(hit), 0)::float8 AS \"Sell TWAP Score\"\nFROM flagged",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "\u2014",
+                  "color": "#546E7A"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "M\u00f6glich (1/3)"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "Wahrsch. (2/3)"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "AKTIV (3/3)"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#546E7A",
+                "value": null
+              },
+              {
+                "color": "#FFB300",
+                "value": 2
+              },
+              {
+                "color": "#EF5350",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
     }
   ],
   "preload": false,
@@ -3586,5 +3916,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 131
+  "version": 132
 }
