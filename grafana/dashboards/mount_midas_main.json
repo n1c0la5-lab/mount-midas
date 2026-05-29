@@ -2167,314 +2167,6 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": 0
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 5,
-        "x": 14,
-        "y": 65
-      },
-      "id": 611,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'hl'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: HL",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": 0
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 5,
-        "x": 19,
-        "y": 65
-      },
-      "id": 612,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'binance'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: Binance",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#42A5F5",
-                "value": 0
-              },
-              {
-                "color": "#26a69a",
-                "value": -0.02
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 14,
-        "y": 68
-      },
-      "id": 613,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  predicted_rate * 100 AS \"Predicted FR\"\nFROM predicted_fundings\nWHERE asset = 'ICP' AND exchange = 'bybit'\nORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted: Bybit",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 4,
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#26a69a",
-                "value": 0
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.03
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.06
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 19,
-        "y": 68
-      },
-      "id": 614,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT NOW() AS \"time\",\n  ABS(\n    MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate END) -\n    MAX(CASE WHEN exchange = 'binance' THEN predicted_rate END)\n  ) * 100 AS \"HL/Bin Spread\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND ts >= NOW() - INTERVAL '10 minutes'",
-          "refId": "A"
-        }
-      ],
-      "title": "Spread HL vs Binance",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
             "mode": "palette-classic"
           },
           "custom": {
@@ -2610,161 +2302,6 @@
         }
       ],
       "title": "EPZ Score Verlauf",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": true,
-            "axisColorMode": "text",
-            "axisLabel": "Predicted FR (%)",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 8,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "stepAfter",
-            "lineWidth": 2,
-            "pointSize": 4,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "dashed"
-            }
-          },
-          "decimals": 5,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "#FFB300",
-                "value": 0.02
-              },
-              {
-                "color": "#ef5350",
-                "value": 0.05
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "HL"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#FFB300",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Binance"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#F4511E",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bybit"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#7E57C2",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 14,
-        "x": 0,
-        "y": 73
-      },
-      "id": 610,
-      "options": {
-        "annotations": {
-          "clustering": -1,
-          "multiLane": false
-        },
-        "legend": {
-          "calcs": [
-            "last"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS \"time\",\n  MAX(CASE WHEN exchange = 'hl'      THEN predicted_rate * 100 END) AS \"HL\",\n  MAX(CASE WHEN exchange = 'binance' THEN predicted_rate * 100 END) AS \"Binance\",\n  MAX(CASE WHEN exchange = 'bybit'   THEN predicted_rate * 100 END) AS \"Bybit\"\nFROM predicted_fundings\nWHERE asset = 'ICP'\n  AND $__timeFilter(ts)\nGROUP BY ts\nORDER BY ts",
-          "refId": "A"
-        }
-      ],
-      "title": "Predicted Funding — Cross-Exchange Vergleich (ICP)",
       "type": "timeseries"
     },
     {
@@ -4155,26 +3692,23 @@
       "type": "volkovlabs-echarts-panel"
     },
     {
-      "id": 725,
-      "type": "row",
       "collapsed": false,
-      "title": "Orderflow — Footprint  (100-Tick · $source)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 153
       },
-      "panels": []
+      "id": 725,
+      "panels": [],
+      "title": "Orderflow — Footprint  (100-Tick · $source)",
+      "type": "row"
     },
     {
-      "id": 730,
-      "type": "volkovlabs-echarts-panel",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Footprint — Buy/Sell pro Preis-Level (100-Tick · $source)",
       "description": "Jede 100-Tick-Bar in Preis-Buckets (0.01 USDT) zerlegt. Zellfarbe = Delta (grün=Kauf-/rot=Verkauf-dominant), Intensität = Volumen. POC-Zelle pro Bar gelb umrandet. Reinzoomen → Zahlen (sell × buy). Weiße Linie = Close. Single-source.",
       "gridPos": {
         "h": 18,
@@ -4182,6 +3716,7 @@
         "x": 0,
         "y": 154
       },
+      "id": 730,
       "options": {
         "baidu": "",
         "editor": {
@@ -4223,7 +3758,9 @@
           "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  price::float AS price,\n  quantity_icp::float AS qty,\n  (is_buyer_maker::int) AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '2 days' AND source = '$source'\nORDER BY ts ASC, id ASC",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Footprint — Buy/Sell pro Preis-Level (100-Tick · $source)",
+      "type": "volkovlabs-echarts-panel"
     }
   ],
   "preload": false,
@@ -4347,5 +3884,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 152
+  "version": 153
 }
