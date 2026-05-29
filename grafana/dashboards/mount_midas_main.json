@@ -1627,7 +1627,8 @@
         }
       ],
       "title": "TWAP Activity \u2014 Institutional Flow (Spot)",
-      "type": "timeseries"
+      "type": "timeseries",
+      "timeFrom": "7d"
     },
     {
       "datasource": {
@@ -3624,37 +3625,28 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.8,
-            "drawStyle": "bars",
-            "fillOpacity": 75,
+            "lineWidth": 1,
+            "fillOpacity": 80,
             "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 0,
-            "pointSize": 5,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisBorderShow": false,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
             },
             "thresholdsStyle": {
               "mode": "off"
+            },
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
             }
           },
           "thresholds": {
@@ -3713,20 +3705,26 @@
       },
       "id": 302,
       "options": {
-        "annotations": {
-          "clustering": -1,
-          "multiLane": false
-        },
+        "xField": "Monat",
+        "orientation": "auto",
+        "stacking": "normal",
+        "showValue": "auto",
+        "barRadius": 0,
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
-          "hideZeros": false,
           "mode": "multi",
-          "sort": "none"
+          "sort": "none",
+          "hideZeros": false
         }
       },
       "pluginVersion": "13.0.1+security-01",
@@ -3736,13 +3734,13 @@
             "type": "grafana-postgresql-datasource",
             "uid": "mount_midas_pg"
           },
-          "format": "time_series",
-          "rawSql": "SELECT\n  DATE_TRUNC('month', wm.ts) AS time,\n  COALESCE(SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ), 0)::float8 AS \"Exchange / Aggregator\",\n  COALESCE(SUM(wm.amount_icp) FILTER (\n      WHERE (wl_d.label IS NULL OR wl_d.label NOT IN ('exchange','aggregator'))\n        AND (wl_h.label IS NULL OR wl_h.label NOT IN ('exchange','aggregator'))\n  ), 0)::float8 AS \"Unbekannt / Staking\"\nFROM wallet_movements wm\nLEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\nLEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\nLEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\nWHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '12 months'\nGROUP BY DATE_TRUNC('month', wm.ts)\nORDER BY time",
+          "format": "table",
+          "rawSql": "SELECT\n  TO_CHAR(DATE_TRUNC('month', wm.ts), 'YYYY-MM') AS \"Monat\",\n  COALESCE(SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ), 0)::float8 AS \"Exchange / Aggregator\",\n  COALESCE(SUM(wm.amount_icp) FILTER (\n      WHERE (wl_d.label IS NULL OR wl_d.label NOT IN ('exchange','aggregator'))\n        AND (wl_h.label IS NULL OR wl_h.label NOT IN ('exchange','aggregator'))\n  ), 0)::float8 AS \"Unbekannt / Staking\"\nFROM wallet_movements wm\nLEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\nLEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\nLEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\nWHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '12 months'\nGROUP BY DATE_TRUNC('month', wm.ts)\nORDER BY DATE_TRUNC('month', wm.ts)",
           "refId": "A"
         }
       ],
       "title": "NP-Outflow nach Ziel \u2014 monatlich",
-      "type": "timeseries"
+      "type": "barchart"
     },
     {
       "datasource": {
@@ -3912,11 +3910,27 @@
             "mode": "thresholds"
           },
           "custom": {
-            "barWidthFactor": 0.8,
-            "drawStyle": "bars",
-            "fillOpacity": 75,
-            "lineWidth": 0,
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            },
             "stacking": {
+              "group": "A",
               "mode": "none"
             }
           },
@@ -3950,28 +3964,42 @@
       },
       "id": 303,
       "options": {
+        "xField": "Monat",
+        "orientation": "auto",
+        "stacking": "none",
+        "showValue": "auto",
+        "barRadius": 0,
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none",
+          "hideZeros": false
         }
       },
-      "pluginVersion": "",
+      "pluginVersion": "13.0.1+security-01",
       "targets": [
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
             "uid": "mount_midas_pg"
           },
-          "format": "time_series",
-          "rawSql": "SELECT\n  DATE_TRUNC('month', wm.ts) AS time,\n  ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ) / NULLIF(SUM(wm.amount_icp), 0), 1)::float8 AS \"Exchange-Flow %\"\nFROM wallet_movements wm\nLEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\nLEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\nLEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\nWHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '12 months'\nGROUP BY DATE_TRUNC('month', wm.ts)\nORDER BY time",
+          "format": "table",
+          "rawSql": "SELECT\n  TO_CHAR(DATE_TRUNC('month', wm.ts), 'YYYY-MM') AS \"Monat\",\n  ROUND(100.0 * SUM(wm.amount_icp) FILTER (\n      WHERE wl_d.label IN ('exchange','aggregator') OR wl_h.label IN ('exchange','aggregator')\n  ) / NULLIF(SUM(wm.amount_icp), 0), 1)::float8 AS \"Exchange-Flow %\"\nFROM wallet_movements wm\nLEFT JOIN np_wallet_labels wl_d ON wl_d.account_id = wm.to_principal\nLEFT JOIN wallet_movements wm_h ON wm_h.from_principal = wm.to_principal AND wm_h.hop_depth = 1\nLEFT JOIN np_wallet_labels wl_h ON wl_h.account_id = wm_h.to_principal\nWHERE wm.hop_depth = 0 AND wm.ts >= NOW() - INTERVAL '12 months'\nGROUP BY DATE_TRUNC('month', wm.ts)\nORDER BY DATE_TRUNC('month', wm.ts)",
           "refId": "A"
         }
       ],
       "title": "Exchange-Flow % \u2014 monatlich",
-      "type": "timeseries"
+      "type": "barchart"
     }
   ],
   "preload": false,
