@@ -12,6 +12,7 @@ import data_watchdog
 import dre_metrics
 import epz_calculator
 import liq_poller
+import master_agent
 import neuron_poller
 import np_poller
 import ob_poller
@@ -56,6 +57,7 @@ def main():
     schedule.every(5).minutes.do(run_async(okx_liq_poller.run))
     schedule.every(15).minutes.do(run_async(epz_calculator.run))
     schedule.every(60).seconds.do(run_async(signal_engine.run))
+    schedule.every(5).minutes.do(run_async(master_agent.run))
     schedule.every().day.at("03:00").do(run_async(tick_collector.run_cleanup))
 
     # Sofortiger Erstlauf
@@ -67,6 +69,9 @@ def main():
 
     log.info("runner: initial run — neuron_poller")
     asyncio.run(neuron_poller.run())
+
+    log.info("runner: initial run — master_agent")
+    asyncio.run(master_agent.run())
 
     log.info("runner: initial run — ob_poller + tick_collector + liq_poller + okx_liq_poller + epz_calculator")
     asyncio.run(ob_poller.run())
@@ -98,6 +103,7 @@ def main():
     log.info("  okx_liq_poller: every 5min")
     log.info("  epz_calculator: every 15min")
     log.info("  signal_engine:  every 60s")
+    log.info("  master_agent:   every 5min")
     log.info("  tick cleanup:   daily 03:00 UTC")
 
     while True:
