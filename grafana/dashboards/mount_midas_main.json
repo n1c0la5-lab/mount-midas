@@ -4011,291 +4011,146 @@
       },
       "id": 700,
       "panels": [],
-      "title": "Orderflow — CVD & Delta (MM-09)",
+      "title": "Orderflow — Delta & CVD  (200-Tick · $source)",
       "type": "row"
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Aggressives Kaufvolumen (grün, +) vs aggressives Verkaufsvolumen (rot, −) pro Bucket. is_buyer_maker=FALSE → Taker-Buy.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "axisCenteredZero": true,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "lineWidth": 1,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
-          },
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Buy (aggressiv)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Sell (aggressiv)"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 126
-      },
-      "id": 701,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "mount_midas_pg"
-          },
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  SUM(CASE WHEN is_buyer_maker THEN 0 ELSE quantity_icp END)::float AS \"Buy (aggressiv)\",\n  SUM(CASE WHEN is_buyer_maker THEN quantity_icp ELSE 0 END)::float * -1 AS \"Sell (aggressiv)\"\nFROM spot_trades\nWHERE $__timeFilter(ts) AND source LIKE '$source'\nGROUP BY 1\nORDER BY 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Aggressor-Delta — Buy vs Sell  ($source · $bucket)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Laufende Summe des Aggressor-Deltas. Divergenz CVD↑ bei flachem Preis = stilles Laden (vgl. MM-02).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "blue",
-            "mode": "fixed"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "spanNulls": true
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 126
-      },
-      "id": 702,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "mount_midas_pg"
-          },
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT \"time\", SUM(delta) OVER (ORDER BY \"time\")::float AS \"CVD\"\nFROM (\n  SELECT $__timeGroup(ts, '$bucket') AS \"time\",\n         SUM(CASE WHEN is_buyer_maker THEN -quantity_icp ELSE quantity_icp END) AS delta\n  FROM spot_trades\n  WHERE $__timeFilter(ts) AND source LIKE '$source'\n  GROUP BY 1\n) q\nORDER BY \"time\"",
-          "refId": "A"
-        }
-      ],
-      "title": "Cumulative Delta (CVD)  ($source · $bucket)",
-      "type": "timeseries"
-    },
-    {
-      "id": 710,
-      "type": "row",
       "collapsed": false,
-      "title": "Orderflow — Order Book Imbalance & Spread (MM-09 S2)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 135
+        "y": 140
       },
-      "panels": []
+      "id": 710,
+      "panels": [],
+      "title": "Orderflow — Order Book Imbalance & Spread  (200-Tick-aligned · Binance)",
+      "type": "row"
     },
     {
-      "id": 711,
-      "type": "timeseries",
+      "id": 720,
+      "type": "volkovlabs-echarts-panel",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Order Book Imbalance — Binance ±2%  ($bucket)",
-      "description": "(Bid − Ask) / (Bid + Ask) der ±2%-Tiefe. >0 = bid-heavy (Support/Kaufdruck), <0 = ask-heavy (Resistance/Verkaufsdruck). Nur Binance (ob_snapshots).",
+      "title": "Delta & CVD pro 200-Tick-Bar  ($source)",
+      "description": "Tick-basiert (gleich breite Bars, Zeit rausgerechnet). Oben: Netto-Aggressor-Delta je Bar (grün/rot). Unten: kumuliertes CVD. Single-source (kein Exchange-Mix). bm=0 → Taker-Buy.",
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 14,
+        "w": 24,
         "x": 0,
-        "y": 136
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "min": -0.5,
-          "max": 0.5,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "red"
-              },
-              {
-                "value": 0,
-                "color": "green"
-              }
-            ]
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 25,
-            "spanNulls": true,
-            "axisCenteredZero": true,
-            "gradientMode": "scheme",
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          }
-        },
-        "overrides": []
+        "y": 126
       },
       "options": {
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom"
+        "baidu": "",
+        "editor": {
+          "format": "auto",
+          "height": 400,
+          "language": "javascript"
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+        "editorMode": "code",
+        "gaode": "",
+        "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\nconst getVals = f => { if (!f) return []; const v = f.values; if (Array.isArray(v)) return v; if (typeof v.toArray === 'function') return v.toArray(); return Array.from(v); };\nconst tsMsArr = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst qtyArr  = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr   = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\nconst TICK_SIZE = 200;\nconst BULL = '#26a69a', BEAR = '#ef5350';\n\nconst bars = []; let cvd = 0;\nfor (let start = 0; start < qtyArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, qtyArr.length);\n  let d = 0;\n  for (let j = start; j < end; j++) { d += bmArr[j] === 0 ? qtyArr[j] : -qtyArr[j]; }\n  cvd += d;\n  bars.push({ tsMs: tsMsArr[start], delta: +d.toFixed(1), cvd: +cvd.toFixed(1), isLive: (end - start) < TICK_SIZE });\n}\nif (!bars.length) return {};\nconst labels = bars.map(b => new Date(b.tsMs).toISOString().slice(11, 16));\n\nreturn {\n  backgroundColor: 'transparent', animation: false,\n  grid: [ { left: 70, right: 20, top: 24, height: '46%' }, { left: 70, right: 20, top: '66%', bottom: 60 } ],\n  xAxis: [\n    { type: 'category', data: labels, gridIndex: 0, axisLabel: { show: false }, axisLine: { lineStyle: { color: '#555' } }, axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true },\n    { type: 'category', data: labels, gridIndex: 1, axisLabel: { color: '#aaa', fontSize: 10 }, axisLine: { lineStyle: { color: '#555' } }, axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true }\n  ],\n  yAxis: [\n    { scale: true, gridIndex: 0, name: 'Delta/Bar', nameTextStyle: { color: '#888', fontSize: 10 }, axisLabel: { color: '#aaa', fontSize: 10, formatter: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0) }, splitLine: { lineStyle: { color: '#2a2a2a' } }, axisLine: { show: false }, axisTick: { show: false } },\n    { scale: true, gridIndex: 1, name: 'CVD', nameTextStyle: { color: '#64B5F6', fontSize: 10 }, axisLabel: { color: '#64B5F6', fontSize: 10, formatter: v => { const a = Math.abs(v); const s = v < 0 ? '-' : ''; return a >= 1000 ? s+(a/1000).toFixed(0)+'k' : s+a.toFixed(0); } }, splitLine: { lineStyle: { color: '#1a2a3a', type: 'dashed' } }, axisLine: { show: false }, axisTick: { show: false } }\n  ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    { type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 20, start: 50, end: 100, textStyle: { color: '#888' }, borderColor: '#444', fillerColor: 'rgba(80,80,80,0.3)', handleStyle: { color: '#777', borderColor: '#555' } }\n  ],\n  tooltip: {\n    trigger: 'axis', axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)', borderColor: '#444', textStyle: { color: '#ddd', fontSize: 11 },\n    formatter: params => {\n      const p = params[0]; if (!p) return ''; const i = p.dataIndex; const b = bars[i]; if (!b) return '';\n      const dc = b.delta >= 0 ? BULL : BEAR; const cc = b.cvd >= 0 ? BULL : BEAR;\n      return '<b>' + new Date(b.tsMs).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</b> <span style=\"color:#888\">(Bar ' + (i+1) + ')</span><br/>'\n        + '<span style=\"color:' + dc + '\">Delta: ' + (b.delta >= 0 ? '+' : '') + (b.delta/1000).toFixed(2) + 'k ICP</span><br/>'\n        + '<span style=\"color:' + cc + '\">CVD: ' + (b.cvd >= 0 ? '+' : '') + (b.cvd/1000).toFixed(1) + 'k ICP</span>'\n        + (b.isLive ? ' <span style=\"color:#aaa\">&#9679; live</span>' : '');\n    }\n  },\n  series: [\n    { name: 'Delta', type: 'bar', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 14,\n      data: bars.map(b => ({ value: b.delta, itemStyle: { color: b.delta >= 0 ? BULL : BEAR } })),\n      markLine: { silent: true, symbol: 'none', lineStyle: { color: '#555' }, data: [{ yAxis: 0 }] } },\n    { name: 'CVD', type: 'line', xAxisIndex: 1, yAxisIndex: 1, symbol: 'none',\n      data: bars.map(b => b.cvd), lineStyle: { color: '#64B5F6', width: 1.5 },\n      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [ { offset: 0, color: 'rgba(100,181,246,0.18)' }, { offset: 1, color: 'rgba(100,181,246,0.0)' } ] } } }\n  ]\n};",
+        "google": "",
+        "map": "none",
+        "renderer": "canvas",
+        "themeEditor": {
+          "config": "{}",
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "name": "default"
+        },
+        "visualEditor": {
+          "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
+          "dataset": [],
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "series": []
         }
       },
       "targets": [
         {
-          "refId": "A",
           "datasource": {
             "type": "postgres",
             "uid": "mount_midas_pg"
           },
-          "format": "time_series",
+          "editorMode": "code",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  (AVG(bid_depth_icp) - AVG(ask_depth_icp))\n    / NULLIF(AVG(bid_depth_icp) + AVG(ask_depth_icp), 0) AS \"Imbalance\"\nFROM ob_snapshots\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  quantity_icp::float AS qty,\n  (is_buyer_maker::int) AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '7 days' AND source = '$source'\nORDER BY ts ASC, id ASC",
+          "refId": "A"
         }
       ]
     },
     {
-      "id": 712,
-      "type": "timeseries",
+      "id": 721,
+      "type": "volkovlabs-echarts-panel",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Spread — Binance ICP/USDT  ($bucket)",
-      "description": "Durchschnittlicher Bid/Ask-Spread in Basispunkten. Spikes = dünne Liquidität / Stress. Nur Binance (ob_snapshots).",
+      "title": "Order Book Imbalance & Spread  (auf 200-Tick gesampelt)",
+      "description": "OB-Snapshot am jeweiligen Tick-Bar-Ende. Imbalance (Bid−Ask)/(Bid+Ask) grün=bid-heavy/rot=ask-heavy; Spread in bps. Orderbuch ist Binance-only.",
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 136
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "orange"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "spanNulls": true,
-            "lineInterpolation": "smooth"
-          }
-        },
-        "overrides": []
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 141
       },
       "options": {
-        "legend": {
-          "showLegend": true,
-          "displayMode": "list",
-          "placement": "bottom"
+        "baidu": "",
+        "editor": {
+          "format": "auto",
+          "height": 400,
+          "language": "javascript"
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+        "editorMode": "code",
+        "gaode": "",
+        "getOption": "const sT = context.panel.data.series[0];\nconst sO = context.panel.data.series[1];\nif (!sT || !sT.fields.length) return {};\nconst getVals = f => { if (!f) return []; const v = f.values; if (Array.isArray(v)) return v; if (typeof v.toArray === 'function') return v.toArray(); return Array.from(v); };\nconst tsMsArr = getVals(sT.fields.find(f => f.name === 'ts_ms'));\nconst obTs  = sO ? getVals(sO.fields.find(f => f.name === 'ts_ms')) : [];\nconst obImb = sO ? getVals(sO.fields.find(f => f.name === 'imb')) : [];\nconst obSpr = sO ? getVals(sO.fields.find(f => f.name === 'spread')) : [];\nif (!tsMsArr.length || !obTs.length) return {};\n\nconst TICK_SIZE = 200;\nconst BULL = '#26a69a', BEAR = '#ef5350';\n\nconst barEnd = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  barEnd.push(tsMsArr[end - 1]);\n}\nconst imb = [], spr = []; let oi = 0;\nfor (let i = 0; i < barEnd.length; i++) {\n  while (oi + 1 < obTs.length && obTs[oi + 1] <= barEnd[i]) oi++;\n  if (obTs[oi] <= barEnd[i]) { imb.push(+(+obImb[oi]).toFixed(4)); spr.push(+(+obSpr[oi]).toFixed(2)); }\n  else { imb.push(null); spr.push(null); }\n}\nconst labels = barEnd.map(t => new Date(t).toISOString().slice(11, 16));\n\nreturn {\n  backgroundColor: 'transparent', animation: false,\n  grid: [ { left: 70, right: 20, top: 24, height: '42%' }, { left: 70, right: 20, top: '64%', bottom: 60 } ],\n  xAxis: [\n    { type: 'category', data: labels, gridIndex: 0, axisLabel: { show: false }, axisLine: { lineStyle: { color: '#555' } }, axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true },\n    { type: 'category', data: labels, gridIndex: 1, axisLabel: { color: '#aaa', fontSize: 10 }, axisLine: { lineStyle: { color: '#555' } }, axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true }\n  ],\n  yAxis: [\n    { scale: true, gridIndex: 0, name: 'Imbalance', nameTextStyle: { color: '#888', fontSize: 10 }, axisLabel: { color: '#aaa', fontSize: 10, formatter: v => (v*100).toFixed(0) + '%' }, splitLine: { lineStyle: { color: '#2a2a2a' } }, axisLine: { show: false }, axisTick: { show: false } },\n    { scale: true, gridIndex: 1, name: 'Spread bps', nameTextStyle: { color: '#f59e0b', fontSize: 10 }, axisLabel: { color: '#f59e0b', fontSize: 10, formatter: v => v.toFixed(1) }, splitLine: { lineStyle: { color: '#2a1f0a', type: 'dashed' } }, axisLine: { show: false }, axisTick: { show: false } }\n  ],\n  visualMap: [ { show: false, seriesIndex: 0, dimension: 1, pieces: [ { gt: 0, color: BULL }, { lte: 0, color: BEAR } ], outOfRange: { color: '#888888' } } ],\n  dataZoom: [\n    { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },\n    { type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 20, start: 50, end: 100, textStyle: { color: '#888' }, borderColor: '#444', fillerColor: 'rgba(80,80,80,0.3)', handleStyle: { color: '#777', borderColor: '#555' } }\n  ],\n  tooltip: {\n    trigger: 'axis', axisPointer: { type: 'cross', crossStyle: { color: '#555' } },\n    backgroundColor: 'rgba(20,20,20,0.92)', borderColor: '#444', textStyle: { color: '#ddd', fontSize: 11 },\n    formatter: params => {\n      const p = params[0]; if (!p) return ''; const i = p.dataIndex;\n      const iv = imb[i], sv = spr[i];\n      if (iv === null || iv === undefined) return '<b>' + (labels[i]||'') + '</b><br/>kein OB-Snapshot';\n      const ic = iv >= 0 ? BULL : BEAR;\n      return '<b>' + new Date(barEnd[i]).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</b> <span style=\"color:#888\">(Bar ' + (i+1) + ')</span><br/>'\n        + '<span style=\"color:' + ic + '\">Imbalance: ' + (iv >= 0 ? '+' : '') + (iv*100).toFixed(1) + '%</span><br/>'\n        + '<span style=\"color:#f59e0b\">Spread: ' + (sv != null ? sv.toFixed(2) : '?') + ' bps</span>';\n    }\n  },\n  series: [\n    { name: 'Imbalance', type: 'line', xAxisIndex: 0, yAxisIndex: 0, symbol: 'none', connectNulls: false,\n      data: imb, lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.12 },\n      markLine: { silent: true, symbol: 'none', lineStyle: { color: '#555' }, data: [{ yAxis: 0 }] } },\n    { name: 'Spread', type: 'line', xAxisIndex: 1, yAxisIndex: 1, symbol: 'none', connectNulls: false,\n      data: spr, lineStyle: { color: '#f59e0b', width: 1.3 }, areaStyle: { color: 'rgba(245,158,11,0.10)' } }\n  ]\n};",
+        "google": "",
+        "map": "none",
+        "renderer": "canvas",
+        "themeEditor": {
+          "config": "{}",
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "name": "default"
+        },
+        "visualEditor": {
+          "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
+          "dataset": [],
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "series": []
         }
       },
       "targets": [
         {
-          "refId": "A",
           "datasource": {
             "type": "postgres",
             "uid": "mount_midas_pg"
           },
-          "format": "time_series",
+          "editorMode": "code",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  AVG(spread_bps) AS \"Spread (bps)\"\nFROM ob_snapshots\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  quantity_icp::float AS qty,\n  (is_buyer_maker::int) AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '7 days' AND source = '$source'\nORDER BY ts ASC, id ASC",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  ((bid_depth_icp - ask_depth_icp) / NULLIF(bid_depth_icp + ask_depth_icp, 0))::float AS imb,\n  spread_bps::float AS spread\nFROM ob_snapshots\nWHERE ts >= NOW() - INTERVAL '7 days'\nORDER BY ts ASC",
+          "refId": "B"
         }
       ]
     }
@@ -4321,11 +4176,6 @@
         "name": "source",
         "options": [
           {
-            "selected": false,
-            "text": "Beide",
-            "value": "%"
-          },
-          {
             "selected": true,
             "text": "Hyperliquid",
             "value": "hl"
@@ -4336,7 +4186,7 @@
             "value": "binance"
           }
         ],
-        "query": "Beide : %,Hyperliquid : hl,Binance : binance",
+        "query": "Hyperliquid : hl,Binance : binance",
         "type": "custom"
       },
       {
@@ -4426,5 +4276,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 149
+  "version": 150
 }
