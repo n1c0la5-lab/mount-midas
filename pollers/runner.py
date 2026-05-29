@@ -12,6 +12,7 @@ import data_watchdog
 import dre_metrics
 import epz_calculator
 import liq_poller
+import neuron_poller
 import np_poller
 import ob_poller
 import okx_liq_poller
@@ -48,6 +49,7 @@ def main():
     schedule.every().day.at("00:05").do(run_async(tick_collector.run_ohlcv))
     schedule.every().hour.do(run_async(wallet_tracker.run))
     schedule.every().hour.do(run_async(tick_collector.run_market_data))
+    schedule.every().hour.do(run_async(neuron_poller.run))
     schedule.every(60).seconds.do(run_async(ob_poller.run))
     schedule.every(60).seconds.do(run_async(tick_collector.run))
     schedule.every(15).minutes.do(run_async(liq_poller.run))
@@ -62,6 +64,9 @@ def main():
 
     log.info("runner: initial run — wallet_tracker")
     asyncio.run(wallet_tracker.run())
+
+    log.info("runner: initial run — neuron_poller")
+    asyncio.run(neuron_poller.run())
 
     log.info("runner: initial run — ob_poller + tick_collector + liq_poller + okx_liq_poller + epz_calculator")
     asyncio.run(ob_poller.run())
@@ -85,6 +90,7 @@ def main():
     log.info("  tick_collector: every 60s")
     log.info("  market_data:    every hour (funding rate + OI)")
     log.info("  wallet_tracker: every hour")
+    log.info("  neuron_poller:  every hour")
     log.info("  ohlcv:          daily 00:05 UTC")
     log.info("  np_poller:      daily 04:00 UTC")
     log.info("  dre_metrics:    daily 04:30 UTC")
