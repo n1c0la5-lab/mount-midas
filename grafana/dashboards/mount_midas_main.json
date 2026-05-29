@@ -4002,46 +4002,37 @@
       "type": "barchart"
     },
     {
-      "id": 700,
-      "type": "row",
       "collapsed": false,
-      "title": "Orderflow — CVD & Delta (MM-09)",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 125
       },
-      "panels": []
+      "id": 700,
+      "panels": [],
+      "title": "Orderflow — CVD & Delta (MM-09)",
+      "type": "row"
     },
     {
-      "id": 701,
-      "type": "timeseries",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Aggressor-Delta — Buy vs Sell  ($source · $bucket)",
       "description": "Aggressives Kaufvolumen (grün, +) vs aggressives Verkaufsvolumen (rot, −) pro Bucket. is_buyer_maker=FALSE → Taker-Buy.",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 126
-      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
           "custom": {
+            "axisCenteredZero": true,
             "drawStyle": "bars",
             "fillOpacity": 80,
             "lineWidth": 1,
-            "axisCenteredZero": true,
             "stacking": {
-              "mode": "normal",
-              "group": "A"
+              "group": "A",
+              "mode": "normal"
             }
-          }
+          },
+          "unit": "short"
         },
         "overrides": [
           {
@@ -4053,8 +4044,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
+                  "fixedColor": "green",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -4068,13 +4059,165 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
+                  "fixedColor": "red",
+                  "mode": "fixed"
                 }
               }
             ]
           }
         ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 126
+      },
+      "id": 701,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mount_midas_pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  SUM(CASE WHEN is_buyer_maker THEN 0 ELSE quantity_icp END)::float AS \"Buy (aggressiv)\",\n  SUM(CASE WHEN is_buyer_maker THEN quantity_icp ELSE 0 END)::float * -1 AS \"Sell (aggressiv)\"\nFROM spot_trades\nWHERE $__timeFilter(ts) AND source LIKE '$source'\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Aggressor-Delta — Buy vs Sell  ($source · $bucket)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Laufende Summe des Aggressor-Deltas. Divergenz CVD↑ bei flachem Preis = stilles Laden (vgl. MM-02).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "spanNulls": true
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 126
+      },
+      "id": 702,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mount_midas_pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT \"time\", SUM(delta) OVER (ORDER BY \"time\")::float AS \"CVD\"\nFROM (\n  SELECT $__timeGroup(ts, '$bucket') AS \"time\",\n         SUM(CASE WHEN is_buyer_maker THEN -quantity_icp ELSE quantity_icp END) AS delta\n  FROM spot_trades\n  WHERE $__timeFilter(ts) AND source LIKE '$source'\n  GROUP BY 1\n) q\nORDER BY \"time\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Cumulative Delta (CVD)  ($source · $bucket)",
+      "type": "timeseries"
+    },
+    {
+      "id": 710,
+      "type": "row",
+      "collapsed": false,
+      "title": "Orderflow — Order Book Imbalance & Spread (MM-09 S2)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 135
+      },
+      "panels": []
+    },
+    {
+      "id": 711,
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "mount_midas_pg"
+      },
+      "title": "Order Book Imbalance — Binance ±2%  ($bucket)",
+      "description": "(Bid − Ask) / (Bid + Ask) der ±2%-Tiefe. >0 = bid-heavy (Support/Kaufdruck), <0 = ask-heavy (Resistance/Verkaufsdruck). Nur Binance (ob_snapshots).",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 136
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -0.5,
+          "max": 0.5,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 0,
+                "color": "green"
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "spanNulls": true,
+            "axisCenteredZero": true,
+            "gradientMode": "scheme",
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -4083,7 +4226,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -4096,36 +4239,36 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  SUM(CASE WHEN is_buyer_maker THEN 0 ELSE quantity_icp END)::float AS \"Buy (aggressiv)\",\n  SUM(CASE WHEN is_buyer_maker THEN quantity_icp ELSE 0 END)::float * -1 AS \"Sell (aggressiv)\"\nFROM spot_trades\nWHERE $__timeFilter(ts) AND source LIKE '$source'\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  (AVG(bid_depth_icp) - AVG(ask_depth_icp))\n    / NULLIF(AVG(bid_depth_icp) + AVG(ask_depth_icp), 0) AS \"Imbalance\"\nFROM ob_snapshots\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
         }
       ]
     },
     {
-      "id": 702,
+      "id": 712,
       "type": "timeseries",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Cumulative Delta (CVD)  ($source · $bucket)",
-      "description": "Laufende Summe des Aggressor-Deltas. Divergenz CVD↑ bei flachem Preis = stilles Laden (vgl. MM-02).",
+      "title": "Spread — Binance ICP/USDT  ($bucket)",
+      "description": "Durchschnittlicher Bid/Ask-Spread in Basispunkten. Spikes = dünne Liquidität / Stress. Nur Binance (ob_snapshots).",
       "gridPos": {
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 126
+        "y": 136
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "none",
           "color": {
             "mode": "fixed",
-            "fixedColor": "blue"
+            "fixedColor": "orange"
           },
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2,
-            "fillOpacity": 10,
+            "fillOpacity": 15,
             "spanNulls": true,
             "lineInterpolation": "smooth"
           }
@@ -4152,7 +4295,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT \"time\", SUM(delta) OVER (ORDER BY \"time\")::float AS \"CVD\"\nFROM (\n  SELECT $__timeGroup(ts, '$bucket') AS \"time\",\n         SUM(CASE WHEN is_buyer_maker THEN -quantity_icp ELSE quantity_icp END) AS delta\n  FROM spot_trades\n  WHERE $__timeFilter(ts) AND source LIKE '$source'\n  GROUP BY 1\n) q\nORDER BY \"time\""
+          "rawSql": "SELECT\n  $__timeGroup(ts, '$bucket') AS \"time\",\n  AVG(spread_bps) AS \"Spread (bps)\"\nFROM ob_snapshots\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
         }
       ]
     }
@@ -4163,6 +4306,83 @@
   "tags": [
     "mount-midas"
   ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "Hyperliquid",
+          "value": "hl"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Quelle",
+        "multi": false,
+        "name": "source",
+        "options": [
+          {
+            "selected": false,
+            "text": "Beide",
+            "value": "%"
+          },
+          {
+            "selected": true,
+            "text": "Hyperliquid",
+            "value": "hl"
+          },
+          {
+            "selected": false,
+            "text": "Binance",
+            "value": "binance"
+          }
+        ],
+        "query": "Beide : %,Hyperliquid : hl,Binance : binance",
+        "type": "custom"
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "current": {
+          "selected": true,
+          "text": "15m",
+          "value": "15m"
+        },
+        "hide": 0,
+        "label": "Bucket",
+        "name": "bucket",
+        "options": [
+          {
+            "selected": false,
+            "text": "1m",
+            "value": "1m"
+          },
+          {
+            "selected": false,
+            "text": "5m",
+            "value": "5m"
+          },
+          {
+            "selected": true,
+            "text": "15m",
+            "value": "15m"
+          },
+          {
+            "selected": false,
+            "text": "1h",
+            "value": "1h"
+          },
+          {
+            "selected": false,
+            "text": "4h",
+            "value": "4h"
+          }
+        ],
+        "query": "1m,5m,15m,1h,4h",
+        "type": "interval"
+      }
+    ]
+  },
   "time": {
     "from": "now-7d",
     "to": "now"
@@ -4206,82 +4426,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 146,
-  "templating": {
-    "list": [
-      {
-        "name": "source",
-        "type": "custom",
-        "label": "Quelle",
-        "hide": 0,
-        "query": "Beide : %,Hyperliquid : hl,Binance : binance",
-        "current": {
-          "selected": true,
-          "text": "Hyperliquid",
-          "value": "hl"
-        },
-        "options": [
-          {
-            "selected": false,
-            "text": "Beide",
-            "value": "%"
-          },
-          {
-            "selected": true,
-            "text": "Hyperliquid",
-            "value": "hl"
-          },
-          {
-            "selected": false,
-            "text": "Binance",
-            "value": "binance"
-          }
-        ],
-        "includeAll": false,
-        "multi": false
-      },
-      {
-        "name": "bucket",
-        "type": "interval",
-        "label": "Bucket",
-        "hide": 0,
-        "query": "1m,5m,15m,1h,4h",
-        "current": {
-          "selected": true,
-          "text": "15m",
-          "value": "15m"
-        },
-        "options": [
-          {
-            "selected": false,
-            "text": "1m",
-            "value": "1m"
-          },
-          {
-            "selected": false,
-            "text": "5m",
-            "value": "5m"
-          },
-          {
-            "selected": true,
-            "text": "15m",
-            "value": "15m"
-          },
-          {
-            "selected": false,
-            "text": "1h",
-            "value": "1h"
-          },
-          {
-            "selected": false,
-            "text": "4h",
-            "value": "4h"
-          }
-        ],
-        "auto": false,
-        "auto_count": 30,
-        "auto_min": "10s"
-      }
-    ]
-  }
+  "version": 149
 }
