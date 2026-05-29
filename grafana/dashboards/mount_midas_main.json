@@ -4028,13 +4028,10 @@
       "type": "row"
     },
     {
-      "id": 720,
-      "type": "volkovlabs-echarts-panel",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Delta & CVD pro 200-Tick-Bar  ($source)",
       "description": "Tick-basiert (gleich breite Bars, Zeit rausgerechnet). Oben: Netto-Aggressor-Delta je Bar (grün/rot). Unten: kumuliertes CVD. Single-source (kein Exchange-Mix). bm=0 → Taker-Buy.",
       "gridPos": {
         "h": 14,
@@ -4042,6 +4039,7 @@
         "x": 0,
         "y": 126
       },
+      "id": 720,
       "options": {
         "baidu": "",
         "editor": {
@@ -4083,16 +4081,15 @@
           "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  quantity_icp::float AS qty,\n  (is_buyer_maker::int) AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '7 days' AND source = '$source'\nORDER BY ts ASC, id ASC",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Delta & CVD pro 200-Tick-Bar  ($source)",
+      "type": "volkovlabs-echarts-panel"
     },
     {
-      "id": 721,
-      "type": "volkovlabs-echarts-panel",
       "datasource": {
         "type": "postgres",
         "uid": "mount_midas_pg"
       },
-      "title": "Order Book Imbalance & Spread  (auf 200-Tick gesampelt)",
       "description": "OB-Snapshot am jeweiligen Tick-Bar-Ende. Imbalance (Bid−Ask)/(Bid+Ask) grün=bid-heavy/rot=ask-heavy; Spread in bps. Orderbuch ist Binance-only.",
       "gridPos": {
         "h": 12,
@@ -4100,6 +4097,7 @@
         "x": 0,
         "y": 141
       },
+      "id": 721,
       "options": {
         "baidu": "",
         "editor": {
@@ -4151,6 +4149,79 @@
           "rawQuery": true,
           "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  ((bid_depth_icp - ask_depth_icp) / NULLIF(bid_depth_icp + ask_depth_icp, 0))::float AS imb,\n  spread_bps::float AS spread\nFROM ob_snapshots\nWHERE ts >= NOW() - INTERVAL '7 days'\nORDER BY ts ASC",
           "refId": "B"
+        }
+      ],
+      "title": "Order Book Imbalance & Spread  (auf 200-Tick gesampelt)",
+      "type": "volkovlabs-echarts-panel"
+    },
+    {
+      "id": 725,
+      "type": "row",
+      "collapsed": false,
+      "title": "Orderflow — Footprint  (100-Tick · $source)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 153
+      },
+      "panels": []
+    },
+    {
+      "id": 730,
+      "type": "volkovlabs-echarts-panel",
+      "datasource": {
+        "type": "postgres",
+        "uid": "mount_midas_pg"
+      },
+      "title": "Footprint — Buy/Sell pro Preis-Level (100-Tick · $source)",
+      "description": "Jede 100-Tick-Bar in Preis-Buckets (0.01 USDT) zerlegt. Zellfarbe = Delta (grün=Kauf-/rot=Verkauf-dominant), Intensität = Volumen. POC-Zelle pro Bar gelb umrandet. Reinzoomen → Zahlen (sell × buy). Weiße Linie = Close. Single-source.",
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 154
+      },
+      "options": {
+        "baidu": "",
+        "editor": {
+          "format": "auto",
+          "height": 400,
+          "language": "javascript"
+        },
+        "editorMode": "code",
+        "gaode": "",
+        "getOption": "const s0 = context.panel.data.series[0];\nif (!s0 || !s0.fields.length) return {};\nconst getVals = f => { if (!f) return []; const v = f.values; if (Array.isArray(v)) return v; if (typeof v.toArray === 'function') return v.toArray(); return Array.from(v); };\nconst tsMsArr  = getVals(s0.fields.find(f => f.name === 'ts_ms'));\nconst priceArr = getVals(s0.fields.find(f => f.name === 'price'));\nconst qtyArr   = getVals(s0.fields.find(f => f.name === 'qty'));\nconst bmArr    = getVals(s0.fields.find(f => f.name === 'bm'));\nif (!tsMsArr.length) return {};\n\nconst TICK_SIZE = 100;\nconst BUCKET = 0.01;\nconst BULL = [38, 166, 154], BEAR = [239, 83, 80];\n\nconst bars = [];\nfor (let start = 0; start < tsMsArr.length; start += TICK_SIZE) {\n  const end = Math.min(start + TICK_SIZE, tsMsArr.length);\n  const cells = {};\n  for (let j = start; j < end; j++) {\n    const key = (Math.floor(priceArr[j] / BUCKET) * BUCKET);\n    const k = key.toFixed(3);\n    if (!cells[k]) cells[k] = { buy: 0, sell: 0, price: +(key + BUCKET / 2).toFixed(4) };\n    if (bmArr[j] === 0) cells[k].buy += qtyArr[j]; else cells[k].sell += qtyArr[j];\n  }\n  bars.push({ tsMs: tsMsArr[start], close: priceArr[end - 1], cells: cells, isLive: (end - start) < TICK_SIZE });\n}\nif (!bars.length) return {};\nconst labels = bars.map(b => new Date(b.tsMs).toISOString().slice(11, 16));\n\nlet maxTot = 0;\nconst cellData = [];\nbars.forEach((b, xi) => {\n  let pocKey = null, pocVol = -1;\n  for (const k in b.cells) { const c = b.cells[k]; const tot = c.buy + c.sell; if (tot > pocVol) { pocVol = tot; pocKey = k; } if (tot > maxTot) maxTot = tot; }\n  for (const k in b.cells) { const c = b.cells[k]; cellData.push([xi, c.price, +c.buy.toFixed(1), +c.sell.toFixed(1), k === pocKey ? 1 : 0]); }\n});\nconst closeData = bars.map(b => b.close);\nconst fmt = v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v).toString();\n\nreturn {\n  backgroundColor: 'transparent', animation: false,\n  grid: { left: 70, right: 20, top: 24, bottom: 60 },\n  xAxis: { type: 'category', data: labels, axisLabel: { color: '#aaa', fontSize: 10 }, axisLine: { lineStyle: { color: '#555' } }, axisTick: { show: false }, splitLine: { show: false }, boundaryGap: true },\n  yAxis: { type: 'value', scale: true, axisLabel: { color: '#aaa', fontSize: 10, formatter: v => v.toFixed(3) }, splitLine: { lineStyle: { color: '#1f1f1f' } }, axisLine: { show: false }, axisTick: { show: false } },\n  dataZoom: [\n    { type: 'inside', xAxisIndex: 0, start: 80, end: 100, filterMode: 'none' },\n    { type: 'inside', yAxisIndex: 0, filterMode: 'none' },\n    { type: 'slider', xAxisIndex: 0, bottom: 5, height: 20, start: 80, end: 100, textStyle: { color: '#888' }, borderColor: '#444', fillerColor: 'rgba(80,80,80,0.3)', handleStyle: { color: '#777', borderColor: '#555' } }\n  ],\n  tooltip: {\n    trigger: 'item', backgroundColor: 'rgba(20,20,20,0.92)', borderColor: '#444', textStyle: { color: '#ddd', fontSize: 11 },\n    formatter: p => {\n      const v = p.value; if (!v || v.length < 4) return '';\n      const buy = v[2], sell = v[3], d = buy - sell;\n      const dc = d >= 0 ? '#26a69a' : '#ef5350';\n      return '<b>$' + (+v[1]).toFixed(3) + '</b> &nbsp; ' + (labels[v[0]] || '') + '<br/>'\n        + 'Buy: <span style=\"color:#26a69a\">' + fmt(buy) + '</span> &nbsp; Sell: <span style=\"color:#ef5350\">' + fmt(sell) + '</span><br/>'\n        + 'Delta: <span style=\"color:' + dc + '\">' + (d >= 0 ? '+' : '') + fmt(d) + '</span>' + (v[4] ? ' &nbsp;<span style=\"color:#f59e0b\">POC</span>' : '');\n    }\n  },\n  series: [\n    {\n      type: 'custom', name: 'Footprint', encode: { x: 0, y: 1 }, data: cellData,\n      renderItem: (params, api) => {\n        const xi = api.value(0), price = api.value(1);\n        const buy = api.value(2), sell = api.value(3), isPOC = api.value(4);\n        const center = api.coord([xi, price]);\n        const wpx = api.size([1, 0])[0];\n        const hpx = Math.abs(api.size([0, BUCKET])[1]);\n        const cw = Math.max(2, wpx * 0.92);\n        const ch = Math.max(1, hpx * 0.92);\n        const d = buy - sell, tot = buy + sell;\n        const base = d >= 0 ? BULL : BEAR;\n        const intensity = 0.15 + 0.85 * Math.min(1, tot / (maxTot || 1));\n        const style = { fill: 'rgba(' + base[0] + ',' + base[1] + ',' + base[2] + ',' + intensity + ')' };\n        if (isPOC) { style.stroke = '#f59e0b'; style.lineWidth = 1; }\n        const children = [{ type: 'rect', shape: { x: center[0] - cw / 2, y: center[1] - ch / 2, width: cw, height: ch }, style: style }];\n        if (cw > 46 && ch > 11) {\n          children.push({ type: 'text', style: { text: fmt(sell) + ' × ' + fmt(buy), x: center[0], y: center[1], textAlign: 'center', textVerticalAlign: 'middle', fontSize: Math.min(10, ch - 2), fill: '#e8e8e8' } });\n        }\n        return { type: 'group', children: children };\n      }\n    },\n    { type: 'line', name: 'Close', data: closeData, lineStyle: { color: 'rgba(255,255,255,0.45)', width: 1 }, symbol: 'none', z: 5, tooltip: { show: false } }\n  ]\n};",
+        "google": "",
+        "map": "none",
+        "renderer": "canvas",
+        "themeEditor": {
+          "config": "{}",
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "name": "default"
+        },
+        "visualEditor": {
+          "code": "return {\n  dataset: context.editor.dataset,\n  series: context.editor.series,\n  xAxis: {\n    type: 'time',\n  },\n  yAxis: {\n    type: 'value',\n    min: 'dataMin',\n  },\n}\n",
+          "dataset": [],
+          "format": "auto",
+          "height": 400,
+          "language": "json",
+          "series": []
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mount_midas_pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  (EXTRACT(EPOCH FROM ts) * 1000)::bigint AS ts_ms,\n  price::float AS price,\n  quantity_icp::float AS qty,\n  (is_buyer_maker::int) AS bm\nFROM spot_trades\nWHERE ts >= NOW() - INTERVAL '2 days' AND source = '$source'\nORDER BY ts ASC, id ASC",
+          "refId": "A"
         }
       ]
     }
@@ -4276,5 +4347,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 151
+  "version": 152
 }
