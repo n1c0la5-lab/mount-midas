@@ -8,6 +8,7 @@ import time
 
 import schedule
 
+import correlation_calculator
 import data_watchdog
 import dre_metrics
 import epz_calculator
@@ -18,6 +19,7 @@ import np_poller
 import ob_poller
 import okx_liq_poller
 import signal_engine
+import threshold_calculator
 import tick_collector
 import volume_profile_calculator
 import wallet_tracker
@@ -47,6 +49,7 @@ def main():
     schedule.every(30).minutes.do(run_async(volume_profile_calculator.run))
     schedule.every().day.at("04:00").do(run_async(np_poller.run))
     schedule.every().day.at("04:30").do(run_async(dre_metrics.run))
+    schedule.every().day.at("05:00").do(run_async(threshold_calculator.run))
     schedule.every().day.at("00:05").do(run_async(tick_collector.run_ohlcv))
     schedule.every().hour.do(run_async(wallet_tracker.run))
     schedule.every().hour.do(run_async(tick_collector.run_market_data))
@@ -56,6 +59,7 @@ def main():
     schedule.every(15).minutes.do(run_async(liq_poller.run))
     schedule.every(5).minutes.do(run_async(okx_liq_poller.run))
     schedule.every(15).minutes.do(run_async(epz_calculator.run))
+    schedule.every(15).minutes.do(run_async(correlation_calculator.run))
     schedule.every(60).seconds.do(run_async(signal_engine.run))
     schedule.every(5).minutes.do(run_async(master_agent.run))
     schedule.every().day.at("03:00").do(run_async(tick_collector.run_cleanup))
@@ -86,6 +90,16 @@ def main():
 
     log.info("runner: initial run — volume_profile_calculator")
     asyncio.run(volume_profile_calculator.run())
+
+    # Erstlauf Calculator — guarded: ein Crash darf den runner NICHT killen,
+    # sonst startet die schedule loop nie (vgl. okx_liq_poller-Incident 2026-05-29).
+    for _name, _fn in (("correlation_calculator", correlation_calculator.run),
+                       ("threshold_calculator", threshold_calculator.run)):
+        try:
+            log.info("runner: initial run — %s", _name)
+            asyncio.run(_fn())
+        except Exception:
+            log.exception("runner: initial run %s FAILED (continuing)", _name)
     # data_watchdog: kein Erstlauf — erster Check nach 5min, wenn alle Poller laufen
 
     log.info("runner: schedule loop started")
@@ -102,6 +116,8 @@ def main():
     log.info("  liq_poller:     every 15min")
     log.info("  okx_liq_poller: every 5min")
     log.info("  epz_calculator: every 15min")
+    log.info("  correlation_calc: every 15min")
+    log.info("  threshold_calc: daily 05:00 UTC")
     log.info("  signal_engine:  every 60s")
     log.info("  master_agent:   every 5min")
     log.info("  tick cleanup:   daily 03:00 UTC")
