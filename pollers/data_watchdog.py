@@ -75,33 +75,66 @@ class Source:
 # ── Schicht B: Daten-Frische ──────────────────────────────────────────────────
 #
 # Vollständigkeits-Regel: JEDE poller-geschriebene Tabelle steht hier. Vorher
-# waren es 7 von 22 — und zwar ausgerechnet die laute Schnell-Schicht, während
+# waren es 7 von 25 — und zwar ausgerechnet die laute Schnell-Schicht, während
 # fünf stille Tabellen zwischen 33 Stunden und 12 Tagen unbemerkt standen.
-# key_levels (4 Zeilen, manuell gepflegt) ist bewusst ausgenommen.
+# key_levels und np_remuneration (manuell/statisch gepflegt) sind ausgenommen.
+#
+# ── Woher die Schwellen kommen ────────────────────────────────────────────────
+# Nicht geschätzt, sondern aus 14 Tagen system_health gemessen — also aus genau
+# der Größe, die hier geprüft wird (now() - max(ts)), nicht aus dem Abstand
+# zwischen Zeilen. Bei Trade-Tabellen sind das zwei verschiedene Dinge: pro
+# Abruf kommen viele Zeilen mit Börsen-Zeitstempeln, die Abstände bleiben also
+# klein, während max(ts) zurückfallen kann.
+#
+#   Quelle              alte Schw.  max gemessen   Alarmquote      neu
+#   liquidation_events      480min      1894min       34.38%      48h (Event)
+#   ob_snapshots              5min        11.0min      2.94%      20min
+#   signal_log                5min        10.9min      2.91%      20min
+#   volume_profile         1560min        40.6min      0%        100min
+#   open_interest            90min        71.4min      0%        120min
+#   funding_rates            90min        71.3min      0%        120min
+#   spot_trades               5min         2.7min      0%         10min
+#
+# Diese drei Quellen erzeugten zusammen rund 40% Alarmquote — bei Prüfung alle
+# 5 Minuten und 60-Minuten-Cooldown bis zu 72 Telegramme am Tag, praktisch alle
+# falsch. Deshalb wurde der Alarmkanal am 2026-07-04 stummgeschaltet, und
+# deshalb blieb danach auch ein echter 31-Stunden-Ausfall unsichtbar.
+# Eine zu enge Schwelle ist kein sicherer Fehler: sie kostet den ganzen Kanal.
+#
+# Wo keine Messung vorliegt, steht die Begründung dabei. Geraten wird nicht.
 SOURCES: dict[str, Source] = {
-    # 60s-Takt
-    "spot_trades":        Source("SELECT MAX(ts) FROM spot_trades",              5 * MIN,  "takt"),
-    "perp_trades":        Source("SELECT MAX(ts) FROM perp_trades",              5 * MIN,  "takt"),
-    "ob_snapshots":       Source("SELECT MAX(ts) FROM ob_snapshots",             5 * MIN,  "takt"),
-    "signal_log":         Source("SELECT MAX(ts) FROM signal_log",              5 * MIN,  "takt"),
-    "market_activity":    Source("SELECT MAX(ts) FROM market_activity",          5 * MIN,  "takt"),
-    # 5min-Takt
-    "system_health":      Source("SELECT MAX(ts) FROM system_health",           20 * MIN,  "takt"),
+    # 60s-Takt. Die 8–12min-Ausschläge sind echt und haben eine Ursache: der
+    # runner ist einsträngig, und wallet_tracker blockiert ihn stündlich rund
+    # 7 Minuten (siehe MM-10 "Offene Punkte").
+    "spot_trades":        Source("SELECT MAX(ts) FROM spot_trades",             10 * MIN,  "takt"),
+    # perp_trades: keine system_health-Historie (war nie bewacht). Gleicher
+    # Poller-Pfad wie spot_trades, aber OHNE den WS-Collector als zweite
+    # Quelle — deshalb dieselbe Schwelle wie die anderen 60s-Tabellen, nicht
+    # die von spot_trades.
+    "perp_trades":        Source("SELECT MAX(ts) FROM perp_trades",             20 * MIN,  "takt"),
+    "ob_snapshots":       Source("SELECT MAX(ts) FROM ob_snapshots",            20 * MIN,  "takt"),
+    "signal_log":         Source("SELECT MAX(ts) FROM signal_log",              20 * MIN,  "takt"),
+    "market_activity":    Source("SELECT MAX(ts) FROM market_activity",         20 * MIN,  "takt"),
+    # 5min-Takt (gemessener Abstand max 16.4min — der blockierende runner wirkt
+    # auch hier)
+    "system_health":      Source("SELECT MAX(ts) FROM system_health",           30 * MIN,  "takt"),
     # Schicht A muss selbst bewacht sein — verstummt poller_runs, ist die
     # Lauf-Überwachung blind, ohne dass es auffällt.
-    "poller_runs":        Source("SELECT MAX(started_at) FROM poller_runs",     20 * MIN,  "takt"),
-    "master_agent_log":   Source("SELECT MAX(ts) FROM master_agent_log",        20 * MIN,  "takt"),
-    # 15min-Takt
+    "poller_runs":        Source("SELECT MAX(started_at) FROM poller_runs",     30 * MIN,  "takt"),
+    "master_agent_log":   Source("SELECT MAX(ts) FROM master_agent_log",        30 * MIN,  "takt"),
+    # 15min-Takt (gemessener Abstand max 25.3min)
     "epz_scores":         Source("SELECT MAX(ts) FROM epz_scores",              50 * MIN,  "takt"),
     "summary_stats":      Source("SELECT MAX(calculated_at) FROM summary_stats", 50 * MIN,  "takt"),
-    "liquidation_snapshots": Source("SELECT MAX(ts) FROM liquidation_snapshots", 50 * MIN,  "takt"),
-    # 30min-Takt
+    # liquidation_snapshots: max 36.9min gemessen, deshalb weiter als die
+    # anderen beiden 15min-Tabellen
+    "liquidation_snapshots": Source("SELECT MAX(ts) FROM liquidation_snapshots", 60 * MIN,  "takt"),
+    # 30min-Takt (max 40.6min)
     "volume_profile":     Source("SELECT MAX(calculated_at) FROM volume_profile", 100 * MIN, "takt"),
-    # Stündlich
-    "funding_rates":      Source("SELECT MAX(ts) FROM funding_rates",            3 * HOUR, "takt"),
-    "open_interest":      Source("SELECT MAX(ts) FROM open_interest",            3 * HOUR, "takt"),
+    # Stündlich (max 71.4min)
+    "funding_rates":      Source("SELECT MAX(ts) FROM funding_rates",            2 * HOUR, "takt"),
+    "open_interest":      Source("SELECT MAX(ts) FROM open_interest",            2 * HOUR, "takt"),
     "neuron_dissolve_snapshots": Source(
-        "SELECT MAX(ts) FROM neuron_dissolve_snapshots",                         3 * HOUR, "takt"),
+        "SELECT MAX(ts) FROM neuron_dissolve_snapshots",                         2 * HOUR, "takt"),
     # Täglich
     "ohlcv_daily":        Source("SELECT MAX(date)::timestamptz FROM ohlcv_daily", 30 * HOUR, "takt"),
     # updated_at, NICHT last_mint_at: np_poller setzt updated_at bei jedem
@@ -119,7 +152,12 @@ SOURCES: dict[str, Source] = {
     "np_performance":     Source("SELECT MAX(ts) FROM np_performance",           72 * HOUR, "takt"),
 
     # Event-getrieben — Alter allein ist hier kein Defekt.
-    "liquidation_events": Source("SELECT MAX(ts) FROM liquidation_events",        8 * HOUR, "event"),
+    #
+    # liquidation_events war mit 8h die lauteste Fehlerquelle im ganzen System:
+    # 34.38% Alarmquote, gemessenes Alter im Schnitt 439min, maximal 1894min
+    # (31.5h). ICP hat einfach über lange Strecken keine Liquidationen — das ist
+    # Marktinformation, kein Defekt. Ob okx_liq_poller läuft, klärt Schicht A.
+    "liquidation_events": Source("SELECT MAX(ts) FROM liquidation_events",       48 * HOUR, "event"),
     "wallet_movements":   Source("SELECT MAX(ts) FROM wallet_movements",         48 * HOUR, "event"),
     "destination_clusters": Source(
         "SELECT MAX(first_seen_at) FROM destination_clusters",                   14 * DAY,  "event"),
@@ -155,7 +193,8 @@ POLLER_CADENCE: dict[str, int] = {
     "tick_collector.run_cleanup":       30 * HOUR,
 }
 
-_LAUF_PREFIX = "lauf:"
+_LAUF_PREFIX  = "lauf:"
+_KANAL_SOURCE = "kanal:telegram"
 
 # Throttle: letzter Alert-Zeitpunkt pro Quelle (in-memory, resets bei Container-Neustart)
 _last_alert: dict[str, datetime] = {}
@@ -206,6 +245,34 @@ async def _record(conn, source: str, last_ts, age_min, is_stale: bool, threshold
         """,
         (source, last_ts, age_min, is_stale, threshold_min),
     )
+
+
+async def _check_alarm_channel(conn) -> bool:
+    """
+    Prüft, ob der Alarmkanal überhaupt zustellen kann, und schreibt das Ergebnis
+    nach system_health — damit es im Dashboard als Kachel erscheint.
+
+    Der Grund für diese Prüfung: der Kanal war am 2026-07-04 stummgeschaltet
+    (TELEGRAM_CHAT_ID geleert), weil zu enge Schwellen ihn zugemüllt hatten.
+    Danach hat der Wächter wochenlang korrekt erkannt und niemandem gesagt —
+    unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher
+    als keiner, weil das Dashboard grün bleibt. Also muss die Stummschaltung
+    selbst sichtbar sein und darf keine Log-Zeile bleiben.
+
+    Gibt True zurück, wenn der Kanal stumm ist.
+    """
+    stumm = not (TELEGRAM_TOKEN and TELEGRAM_CHAT_ID)
+    await _record(conn, _KANAL_SOURCE, None, None, stumm, 0)
+    if stumm:
+        fehlt = []
+        if not TELEGRAM_TOKEN:
+            fehlt.append("TELEGRAM_TOKEN")
+        if not TELEGRAM_CHAT_ID:
+            fehlt.append("TELEGRAM_CHAT_ID")
+        log.warning("data_watchdog: ALARMKANAL STUMM — %s nicht gesetzt. "
+                    "Befunde bleiben im Dashboard, gehen aber an niemanden raus.",
+                    " und ".join(fehlt))
+    return stumm
 
 
 async def _check_freshness(conn, now: datetime) -> list[tuple[str, float | None, int]]:
@@ -303,23 +370,33 @@ async def run() -> None:
         async with await psycopg.AsyncConnection.connect(_DSN) as conn:
             await conn.execute(_CREATE)
 
+            stumm = await _check_alarm_channel(conn)
             problems = await _check_runs(conn, now)
             problems += await _check_freshness(conn, now)
 
             await conn.commit()
 
-        # Gebündelt: ein Alarm für alles, was gerade nicht auf Cooldown steht.
-        # Vorher ging eine Nachricht PRO Quelle raus — bei einem breiten Ausfall
-        # wären das jetzt 40+ Telegrams gewesen.
-        due = [p for p in problems if _should_alert(p[0], now)]
-        if due:
-            async with aiohttp.ClientSession() as session:
-                await _send_telegram(session, _build_alert(due))
-            for name, _, _ in due:
-                _last_alert[name] = now
+        if stumm:
+            # Bei stummem Kanal NICHT senden und den Cooldown NICHT setzen:
+            # sonst verbrauchen die Alarme still ihre Sperrfrist und es bliebe
+            # nach dem Entstummen eine weitere Stunde ruhig.
+            if problems:
+                log.warning("data_watchdog: %d Befunde, aber Kanal stumm — "
+                            "nur im Dashboard sichtbar", len(problems))
+        else:
+            # Gebündelt: ein Alarm für alles, was gerade nicht auf Cooldown steht.
+            # Vorher ging eine Nachricht PRO Quelle raus — bei einem breiten
+            # Ausfall wären das mit 44 Prüfungen entsprechend viele geworden.
+            due = [p for p in problems if _should_alert(p[0], now)]
+            if due:
+                async with aiohttp.ClientSession() as session:
+                    await _send_telegram(session, _build_alert(due))
+                for name, _, _ in due:
+                    _last_alert[name] = now
 
-        log.info("data_watchdog: fertig — %d Quellen geprüft, %d Poller, %d Befunde",
-                 len(SOURCES), len(POLLER_CADENCE), len(problems))
+        log.info("data_watchdog: fertig — %d Quellen, %d Poller, %d Befunde, Kanal %s",
+                 len(SOURCES), len(POLLER_CADENCE), len(problems),
+                 "stumm" if stumm else "aktiv")
 
     except Exception:
         log.exception("data_watchdog: Fehler")
