@@ -112,7 +112,7 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
-      "description": "Kann der Wächter seine Befunde überhaupt zustellen? 'Aktiv' heißt: TELEGRAM_TOKEN und TELEGRAM_CHAT_ID sind gesetzt. 'STUMM' heißt: alles rechts davon ist zwar korrekt, erfährt aber niemand.\n\nDiese Kachel existiert, weil der Kanal am 2026-07-04 stummgeschaltet wurde (zu enge Schwellen hatten ihn zugemüllt) und der Wächter danach wochenlang richtig erkannt und geschwiegen hat — unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher als keiner, weil das Dashboard grün bleibt.",
+      "description": "Kann der Wächter seine Befunde überhaupt zustellen? 'Aktiv' heißt: TELEGRAM_TOKEN und TELEGRAM_CHAT_ID sind gesetzt. 'STUMM' heißt: alles rechts davon ist zwar korrekt, erfährt aber niemand.\n\nDiese Kachel existiert, weil der Kanal am 2026-07-04 stummgeschaltet wurde (zu enge Schwellen hatten ihn zugemüllt) und der Wächter danach wochenlang richtig erkannt und geschwiegen hat — unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher als keiner, weil das Dashboard grün bleibt.\n\nZeigt bewusst 'No data', wenn der Wächter selbst seit über 30 Minuten nichts geschrieben hat — ein alter Kanal-Befund ist keine Aussage über jetzt. Warum er schweigt, sagt die Kachel links.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -185,7 +185,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],

@@ -307,6 +307,66 @@ def check_period_completeness_logic(r: Result) -> None:
     r.ok(f"{name} ({len(cases)} Fälle)")
 
 
+def check_panels_no_invented_values(r: Result) -> None:
+    """
+    Kein Panel darf einen Wert erfinden, wenn die Daten fehlen.
+
+    Zwei mechanisch prüfbare Formen:
+
+    1. Ein Einzelwert-Panel (stat/gauge) mit 'ORDER BY ... DESC LIMIT 1' ohne
+       Zeitgrenze zeigt den letzten Wert ewig weiter. Stirbt der Poller, friert
+       die Kachel ein und sieht weiter lebendig aus.
+    2. COALESCE(..., <Literal ungleich 0>) setzt einen frei gewählten Ersatzwert
+       ein. Die Volume-Profile-Kachel hatte so VAH/POC/VAL fest mit 2.90/2.40/2.27
+       hinterlegt — rund ein Drittel über den echten Werten.
+
+    COALESCE(..., 0) ist ausdrücklich erlaubt: bei einer Aggregation über ein
+    Zeitfenster ist "nichts passiert" eine echte Null.
+    """
+    name = "Panels erfinden keine Werte (Einzelwert ohne Zeitgrenze / Ersatz-Literal)"
+    dash_dir = REPO / "grafana" / "dashboards"
+    if not dash_dir.is_dir():
+        r.fail(name, "grafana/dashboards nicht gefunden")
+        return
+
+    import json
+
+    unbounded: list[str] = []
+    invented: list[str] = []
+    time_bound = re.compile(r"NOW\(\)\s*-\s*INTERVAL|CURRENT_DATE|\$__time", re.I)
+    latest_one = re.compile(r"ORDER BY\s+\w+\s+DESC\s+LIMIT\s+1", re.I)
+    # COALESCE(..., <zahl>) mit einer Zahl, die nicht 0 / 0.0 ist
+    fake_default = re.compile(r"COALESCE\s*\((?:[^()]|\([^()]*\))*,\s*(\d+\.\d+|[1-9]\d*)\s*\)", re.I)
+
+    for path in sorted(dash_dir.glob("*.json")):
+        try:
+            dash = json.loads(path.read_text())
+        except Exception as e:
+            r.fail(name, f"{path.name}: nicht lesbar ({e})")
+            return
+        for p in dash.get("panels", []):
+            for t in p.get("targets", []):
+                sql = " ".join((t.get("rawSql") or "").split())
+                if not sql:
+                    continue
+                where = f'{path.name} · {p.get("id")} "{p.get("title", "")[:38]}"'
+                if (p.get("type") in ("stat", "gauge")
+                        and latest_one.search(sql) and not time_bound.search(sql)):
+                    unbounded.append(where)
+                for m in fake_default.finditer(sql):
+                    invented.append(f"{where} — Ersatzwert {m.group(1)}")
+
+    problems = []
+    if unbounded:
+        problems.append("Einzelwert ohne Zeitgrenze:\n  " + "\n  ".join(unbounded))
+    if invented:
+        problems.append("Erfundener Ersatzwert:\n  " + "\n  ".join(invented))
+    if problems:
+        r.fail(name, "\n".join(problems))
+        return
+    r.ok(name)
+
+
 # ── Prüfungen mit Datenbank ───────────────────────────────────────────────────
 
 def check_migrations_and_queries(r: Result, dsn: str | None) -> None:
@@ -380,6 +440,7 @@ def main() -> int:
     check_no_unnamed_index_with_if_not_exists(r)
     check_rowcount_not_guessed(r)
     check_period_completeness_logic(r)
+    check_panels_no_invented_values(r)
 
     print("\n--- Mit Datenbank ---")
     check_migrations_and_queries(r, args.dsn)

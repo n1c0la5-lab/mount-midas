@@ -21,7 +21,7 @@ echo ""
 
 # ── Dateien in den Container ──────────────────────────────────────────────────
 echo "--- Übertrage Repo-Stand auf die Devbox ---"
-if ! tar cf - -C "$REPO_DIR" --exclude='__pycache__' pollers migrations scripts \
+if ! tar cf - -C "$REPO_DIR" --exclude='__pycache__' pollers migrations scripts grafana \
   | ssh "$DEVBOX" "rm -rf /tmp/mm-gate && mkdir -p /tmp/mm-gate \
       && tar xf - -C /tmp/mm-gate \
       && docker exec mount-midas-pollers rm -rf /tmp/mm-gate \
