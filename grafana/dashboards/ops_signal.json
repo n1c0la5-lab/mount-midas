@@ -58,7 +58,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT score FROM signal_log ORDER BY ts DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT score FROM signal_log WHERE ts > NOW() - INTERVAL '20 minutes' ORDER BY ts DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -106,7 +106,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT SUM(mandatory_sell_icp) FROM np_threshold_daily WHERE ts::date = CURRENT_DATE), 0) AS value",
+          "rawSql": "SELECT (SELECT SUM(mandatory_sell_icp) FROM np_threshold_daily WHERE ts::date = CURRENT_DATE) AS value",
           "refId": "A"
         }
       ],
@@ -170,7 +170,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT ROUND(COALESCE(taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100, 0)::numeric, 1) AS value FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT ROUND((taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100)::numeric, 1) AS value FROM liquidation_snapshots WHERE ts > NOW() - INTERVAL '60 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -674,7 +674,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT vah_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.90) AS \"VAH\", COALESCE((SELECT poc_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.40) AS \"POC\", COALESCE((SELECT val_price FROM volume_profile ORDER BY calculated_at DESC LIMIT 1), 2.27) AS \"VAL\"",
+          "rawSql": "SELECT vah_price AS \"VAH\", poc_price AS \"POC\", val_price AS \"VAL\" FROM volume_profile WHERE calculated_at > NOW() - INTERVAL '100 minutes' ORDER BY calculated_at DESC LIMIT 1",
           "refId": "A"
         }
       ],

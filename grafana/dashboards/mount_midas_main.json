@@ -29,6 +29,420 @@
         "x": 0,
         "y": 0
       },
+      "id": 740,
+      "panels": [],
+      "title": "Wächter — Datenlage (MM-10)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Minuten seit dem letzten data_watchdog-Durchlauf. Diese Kachel ist die wichtigste der Zeile: sie beantwortet, ob den anderen Kacheln überhaupt zu glauben ist. Steht sie rot, sind die Zahlen rechts davon veraltet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 741,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ts)))/60 AS value FROM system_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Wächter — letzter Lauf",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Kann der Wächter seine Befunde überhaupt zustellen? 'Aktiv' heißt: TELEGRAM_TOKEN und TELEGRAM_CHAT_ID sind gesetzt. 'STUMM' heißt: alles rechts davon ist zwar korrekt, erfährt aber niemand.\n\nDiese Kachel existiert, weil der Kanal am 2026-07-04 stummgeschaltet wurde (zu enge Schwellen hatten ihn zugemüllt) und der Wächter danach wochenlang richtig erkannt und geschwiegen hat — unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher als keiner, weil das Dashboard grün bleibt.\n\nZeigt bewusst 'No data', wenn der Wächter selbst seit über 30 Minuten nichts geschrieben hat — ein alter Kanal-Befund ist keine Aussage über jetzt. Warum er schweigt, sagt die Kachel links.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Aktiv"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "STUMM"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 4,
+        "y": 1
+      },
+      "id": 745,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Alarmkanal",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Anzahl der Datenquellen, deren neuester Datenpunkt älter ist als der für sie vereinbarte Takt. 0 heißt: alle 26 überwachten Tabellen sind frisch. Kein Wert ('No data') heißt: der Wächter hat in den letzten 30 Minuten nichts geschrieben — dann gilt die Kachel links.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 7,
+        "y": 1
+      },
+      "id": 742,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source NOT LIKE 'lauf:%' AND source NOT LIKE 'kanal:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Quellen stale",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Anzahl der Poller, deren letzter ERFOLGREICHER Lauf länger zurückliegt als erlaubt (Schicht A, poller_runs). Ein Poller, der nur noch mit Fehler durchläuft, zählt als still — sonst würde ein Dauerfehler als Gesundheit gelesen.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 11,
+        "y": 1
+      },
+      "id": 743,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source LIKE 'lauf:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Poller still",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Nur die Quellen und Poller, bei denen gerade etwas nicht stimmt. Leer ist der gute Zustand. Bewusst OHNE Ersatztext bei leerem Ergebnis: 'keine Befunde' wäre eine Behauptung, die auch dann erscheint, wenn der Wächter selbst tot ist. Die Lebendigkeit steht links.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "inspect": false
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Quelle"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alter (h)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schwelle (h)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 9,
+        "x": 15,
+        "y": 1
+      },
+      "id": 744,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN source LIKE 'lauf:%'  THEN 'Poller: ' || SUBSTRING(source FROM 6) WHEN source LIKE 'kanal:%' THEN 'ALARMKANAL STUMM (' || SUBSTRING(source FROM 7) || ')' ELSE source END AS \"Quelle\", last_data_ts AS \"Letzter Stempel\", ROUND(age_minutes / 60.0, 1) AS \"Alter (h)\", ROUND(threshold_min / 60.0, 1) AS \"Schwelle (h)\" FROM ( SELECT DISTINCT ON (source) * FROM system_health WHERE ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x WHERE is_stale ORDER BY age_minutes DESC NULLS FIRST",
+          "refId": "A"
+        }
+      ],
+      "title": "Befunde — was gerade nicht stimmt",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
       "id": 731,
       "title": "Regime — Marktphase",
       "type": "row"
@@ -73,7 +487,7 @@
         "h": 5,
         "w": 3,
         "x": 0,
-        "y": 1
+        "y": 6
       },
       "id": 14,
       "options": {
@@ -112,7 +526,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT extreme_score::float8 AS \"EPZ Score\" FROM epz_scores ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT extreme_score::float8 AS \"EPZ Score\" FROM epz_scores WHERE ts > NOW() - INTERVAL '50 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -159,7 +573,7 @@
         "h": 5,
         "w": 3,
         "x": 3,
-        "y": 1
+        "y": 6
       },
       "id": 15,
       "options": {
@@ -198,7 +612,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT score::float8 AS \"Score\" FROM signal_log ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT score::float8 AS \"Score\" FROM signal_log WHERE ts > NOW() - INTERVAL '20 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -247,7 +661,7 @@
         "h": 5,
         "w": 3,
         "x": 6,
-        "y": 1
+        "y": 6
       },
       "id": 3,
       "options": {
@@ -286,7 +700,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT ROUND(COALESCE(taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100, 0)::numeric, 1) AS value FROM liquidation_snapshots ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT ROUND((taker_sell_vol_icp / NULLIF(taker_buy_vol_icp + taker_sell_vol_icp, 0) * 100)::numeric, 1) AS value FROM liquidation_snapshots WHERE ts > NOW() - INTERVAL '60 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -326,7 +740,7 @@
         "h": 5,
         "w": 3,
         "x": 9,
-        "y": 1
+        "y": 6
       },
       "id": 2,
       "options": {
@@ -354,7 +768,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT SUM(mandatory_sell_icp) FROM np_threshold_daily WHERE ts::date = CURRENT_DATE), 0) AS value",
+          "rawSql": "SELECT (SELECT SUM(mandatory_sell_icp) FROM np_threshold_daily WHERE ts::date = CURRENT_DATE) AS value",
           "refId": "A"
         }
       ],
@@ -415,7 +829,7 @@
         "h": 5,
         "w": 3,
         "x": 12,
-        "y": 1
+        "y": 6
       },
       "id": 4,
       "options": {
@@ -520,7 +934,7 @@
         "h": 5,
         "w": 2,
         "x": 15,
-        "y": 1
+        "y": 6
       },
       "id": 618,
       "options": {
@@ -627,7 +1041,7 @@
         "h": 5,
         "w": 2,
         "x": 17,
-        "y": 1
+        "y": 6
       },
       "id": 619,
       "options": {
@@ -673,7 +1087,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 11
       },
       "id": 604,
       "options": {
@@ -775,7 +1189,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 25
       },
       "id": 609,
       "options": {
@@ -960,7 +1374,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 35
       },
       "id": 27,
       "options": {
@@ -1210,7 +1624,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 43
       },
       "id": 25,
       "options": {
@@ -1406,7 +1820,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 53
       },
       "id": 616,
       "options": {
@@ -1471,7 +1885,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 61
       },
       "id": 732,
       "title": "Institutional Flow — TWAP Detection",
@@ -1712,7 +2126,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 62
       },
       "id": 603,
       "options": {
@@ -1939,7 +2353,7 @@
         "h": 8,
         "w": 14,
         "x": 0,
-        "y": 65
+        "y": 70
       },
       "id": 602,
       "options": {
@@ -2116,7 +2530,7 @@
         "h": 8,
         "w": 10,
         "x": 14,
-        "y": 65
+        "y": 70
       },
       "id": 403,
       "options": {
@@ -2157,7 +2571,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 78
       },
       "id": 733,
       "title": "Ops & Signal",
@@ -2304,7 +2718,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 74
+        "y": 79
       },
       "id": 5,
       "options": {
@@ -2336,7 +2750,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 74
+        "y": 79
       },
       "id": 6,
       "options": {
@@ -2490,7 +2904,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 74
+        "y": 79
       },
       "id": 402,
       "options": {
@@ -2538,7 +2952,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 89
       },
       "id": 734,
       "title": "Korrelation & Edge",
@@ -2580,7 +2994,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 85
+        "y": 90
       },
       "id": 21,
       "options": {
@@ -2608,7 +3022,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT sell_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT sell_price_corr FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -2651,7 +3065,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 85
+        "y": 90
       },
       "id": 22,
       "options": {
@@ -2679,7 +3093,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT oi_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT oi_price_corr FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -2719,7 +3133,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 85
+        "y": 90
       },
       "id": 23,
       "options": {
@@ -2747,7 +3161,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT best_lag_hours FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT best_lag_hours FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -2790,7 +3204,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 85
+        "y": 90
       },
       "id": 24,
       "options": {
@@ -2831,7 +3245,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 94
       },
       "id": 735,
       "title": "NP-Analyse",
@@ -2920,7 +3334,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 90
+        "y": 95
       },
       "id": 302,
       "options": {
@@ -3018,7 +3432,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 90
+        "y": 95
       },
       "id": 303,
       "options": {
@@ -3192,7 +3606,7 @@
         "h": 10,
         "w": 6,
         "x": 0,
-        "y": 96
+        "y": 101
       },
       "id": 301,
       "options": {
@@ -3294,7 +3708,7 @@
         "h": 10,
         "w": 10,
         "x": 6,
-        "y": 96
+        "y": 101
       },
       "id": 304,
       "options": {
@@ -3374,7 +3788,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 96
+        "y": 101
       },
       "id": 305,
       "options": {
@@ -3408,7 +3822,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 111
       },
       "id": 736,
       "title": "Orderflow — Delta & CVD  (200-Tick · $source)",
@@ -3424,7 +3838,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 107
+        "y": 112
       },
       "id": 720,
       "options": {
@@ -3479,7 +3893,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 126
       },
       "id": 737,
       "title": "Orderflow — Order Book Imbalance & Spread  (200-Tick-aligned · Binance)",
@@ -3495,7 +3909,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 127
       },
       "id": 721,
       "options": {
@@ -3561,7 +3975,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 134
+        "y": 139
       },
       "id": 738,
       "title": "Orderflow — Footprint  (100-Tick · $source)",
@@ -3577,7 +3991,7 @@
         "h": 18,
         "w": 24,
         "x": 0,
-        "y": 135
+        "y": 140
       },
       "id": 730,
       "options": {
@@ -3821,5 +4235,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 157
+  "version": 158
 }

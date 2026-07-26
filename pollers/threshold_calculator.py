@@ -60,14 +60,18 @@ async def _fetch_icp_usd(conn) -> float:
 async def _fetch_rewards(conn) -> dict[str, float]:
     """
     Aktuelle Monatsbelohnung pro NP-Principal aus np_reward_mints.
-    Nimmt die Periode mit dem höchsten ts (≈ letzter DRE-Lauf).
+
+    Auswahl über die höchste reward_period ('YYYY-MM' sortiert lexikalisch
+    korrekt), nicht über den höchsten ts. Der ts-Weg war fragil: sobald
+    dre_metrics einen abgeschlossenen Monat nachträglich finalisiert, wäre
+    dessen Zeile die zeitlich neueste und der alte Monat würde als "aktuell"
+    gelesen (vgl. MM-10, Migration 018).
     """
     async with conn.cursor() as cur:
         await cur.execute("""
-            SELECT DISTINCT ON (provider_principal)
-                provider_principal, amount_icp
+            SELECT provider_principal, amount_icp
             FROM np_reward_mints
-            ORDER BY provider_principal, ts DESC
+            WHERE reward_period = (SELECT MAX(reward_period) FROM np_reward_mints)
         """)
         rows = await cur.fetchall()
     return {r[0]: float(r[1]) for r in rows}

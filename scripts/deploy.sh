@@ -52,6 +52,17 @@ if [[ $ERRORS -gt 0 ]]; then
 fi
 echo "✅ Syntax: alle Poller valide"
 
+# ── Gate 4: MM-10 Regression-Check ───────────────────────────────
+# Syntax beweist nur, dass die Datei lesbar ist. Dieses Gate prüft, ob der
+# Wächter noch vollständig ist, ob die Migrationen auf einer leeren DB
+# durchlaufen und ob das Live-Schema aus den Migrationen reproduzierbar ist.
+echo ""
+if ! bash "$REPO_DIR/scripts/gate.sh"; then
+  echo ""
+  echo "❌ STOP: MM-10 Gate fehlgeschlagen. Kein Deploy."
+  exit 1
+fi
+
 # ── Deploy ────────────────────────────────────────────────────
 echo ""
 echo "--- Deploy auf Devbox ---"

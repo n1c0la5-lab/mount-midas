@@ -58,7 +58,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT sell_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT sell_price_corr FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -122,7 +122,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT oi_price_corr FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT oi_price_corr FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],
@@ -170,7 +170,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COALESCE((SELECT best_lag_hours FROM summary_stats ORDER BY calculated_at DESC LIMIT 1), 0) AS value",
+          "rawSql": "SELECT (SELECT best_lag_hours FROM summary_stats WHERE calculated_at > NOW() - INTERVAL '50 minutes' ORDER BY calculated_at DESC LIMIT 1) AS value",
           "refId": "A"
         }
       ],

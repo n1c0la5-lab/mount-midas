@@ -59,8 +59,17 @@ async def fetch_trades(
 
 
 async def insert_trades(conn, table: str, trades: list[dict]) -> int:
+    """
+    Gibt die GEMESSENE Zahl neuer Zeilen zurück, nicht len(trades).
+
+    ON CONFLICT DO NOTHING schluckt Duplikate still — die angebotene Zahl sagt
+    also nichts über den Schreiberfolg. Seit MM-10 landet dieser Rückgabewert in
+    poller_runs.rows_written, wo eine geratene Zahl die Lauf-Überwachung selbst
+    belügen würde (gefunden vom Gate, gleiche Klasse wie MM-10 Defekt 3).
+    """
     if not trades:
         return 0
+    inserted = 0
     async with conn.cursor() as cur:
         for t in trades:
             await cur.execute(
@@ -77,8 +86,9 @@ async def insert_trades(conn, table: str, trades: list[dict]) -> int:
                     t["m"],
                 ),
             )
+            inserted += cur.rowcount
     await conn.commit()
-    return len(trades)
+    return inserted
 
 
 async def collect_spot(session: aiohttp.ClientSession, conn) -> int:
@@ -147,13 +157,19 @@ async def cleanup_old_trades(conn) -> None:
     log.info("cleanup: removed trades older than %d days", ROLLING_DAYS)
 
 
-async def run() -> None:
-    """Collect one batch of trades + calc ratio — called every 60s by runner."""
+async def run() -> int:
+    """
+    Collect one batch of trades + calc ratio — called every 60s by runner.
+
+    Gibt die Summe der neu geschriebenen Trades zurück, damit der Lauf-Stempel
+    in poller_runs eine echte Zahl bekommt statt NULL (MM-10 Schicht A).
+    """
     async with await psycopg.AsyncConnection.connect(_DSN) as conn:
         async with aiohttp.ClientSession() as session:
-            await collect_spot(session, conn)
-            await collect_perp(session, conn)
+            n = await collect_spot(session, conn)
+            n += await collect_perp(session, conn)
         await calc_ratio(conn)
+    return n
 
 
 async def run_cleanup() -> None:

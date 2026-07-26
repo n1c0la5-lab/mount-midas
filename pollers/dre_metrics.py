@@ -71,13 +71,58 @@ def _int_or_none(val: str) -> int | None:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+def _month_end(reward_period: str) -> datetime:
+    """Erster Moment NACH dem Monat (exklusive Obergrenze)."""
+    y, m = (int(p) for p in reward_period.split("-"))
+    y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return datetime(y, m, 1, tzinfo=timezone.utc)
+
+
+def is_period_complete(
+    reward_period: str,
+    now: datetime,
+    last_fetched_at: datetime | None,
+) -> bool:
+    """
+    Reine Entscheidung: ist dieser Monat endgültig gespeichert?
+
+    Bewusst ohne DB-Zugriff, damit das Gate echtes Verhalten prüfen kann und
+    nicht nur, ob die richtigen Wörter im Quelltext stehen.
+
+    Drei Fälle, die alle einmal falsch waren oder es beinahe wurden:
+
+    1. Laufender Monat → NIE fertig. Belohnungen akkumulieren, Tagesmetriken
+       kommen hinzu. Die alte Prüfung ("existiert irgendeine Zeile?") hat den
+       ersten Zwischenstand als fertig abgestempelt und den Monat für seine
+       restliche Laufzeit gesperrt — np_performance stand 12 Tage still
+       (MM-10 Defekt 1).
+    2. Abgeschlossener Monat, aber nur MITTEN in seiner Laufzeit gelesen →
+       ebenfalls nicht fertig. Sonst bliebe der Juli für immer halb: am 1.8.
+       wäre er "abgeschlossen und vorhanden" und würde nie nachgeholt.
+    3. Abgeschlossener Monat, nach Monatsende gelesen → fertig.
+    """
+    end = _month_end(reward_period)
+    # Regel 1 ist streng genommen redundant: ein Lesevorgang mitten im Monat
+    # liegt immer vor dem Monatsende, weshalb schon die letzte Zeile False
+    # liefert. Sie bleibt stehen, weil sie die Absicht ausspricht — aber wer sie
+    # entfernt, ändert kein Verhalten (im Gate geprüft).
+    if now < end:
+        return False
+    if last_fetched_at is None:
+        return False
+    return last_fetched_at >= end
+
+
 async def is_period_done(conn, reward_period: str) -> bool:
+    """DB-Hülle um is_period_complete()."""
     async with conn.cursor() as cur:
         await cur.execute(
-            "SELECT 1 FROM np_reward_mints WHERE reward_period = %s LIMIT 1",
+            "SELECT MAX(fetched_at) FROM np_reward_mints WHERE reward_period = %s",
             (reward_period,),
         )
-        return await cur.fetchone() is not None
+        row = await cur.fetchone()
+    last_fetched_at = row[0] if row else None
+    return is_period_complete(reward_period, datetime.now(timezone.utc), last_fetched_at)
 
 
 async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int:
@@ -86,6 +131,7 @@ async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int
         log.warning("dre_metrics: node_providers_summary.csv not found in %s", period_dir)
         return 0
 
+    now = datetime.now(timezone.utc)
     rows: list[tuple] = []
     with summary.open() as f:
         for row in csv.DictReader(f):
@@ -93,24 +139,35 @@ async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int
             if rewards_icp is None:
                 continue
             rows.append((
-                datetime.now(timezone.utc),
+                now,
                 row["node_provider_id"],
                 rewards_icp,
                 reward_period,
+                now,
             ))
 
+    # DO UPDATE, nicht DO NOTHING: Monatsbelohnungen wachsen im Monatsverlauf.
+    # DO NOTHING hat den ersten Zwischenstand für den ganzen Monat
+    # festgeschrieben — threshold_calculator rechnete daraus 11 Tage lang
+    # dieselbe ICP-Menge (MM-10 Defekt 2 + 4).
+    # ts bleibt beim Erstkontakt stehen, fetched_at trägt den Lesezeitpunkt.
+    written = 0
     async with conn.cursor() as cur:
         for r in rows:
             await cur.execute(
                 """
-                INSERT INTO np_reward_mints (ts, provider_principal, amount_icp, reward_period)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (provider_principal, reward_period) DO NOTHING
+                INSERT INTO np_reward_mints
+                    (ts, provider_principal, amount_icp, reward_period, fetched_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (provider_principal, reward_period) DO UPDATE SET
+                    amount_icp = EXCLUDED.amount_icp,
+                    fetched_at = EXCLUDED.fetched_at
                 """,
                 r,
             )
+            written += cur.rowcount
     await conn.commit()
-    return len(rows)
+    return written
 
 
 async def insert_np_performance(conn, period_dir: Path) -> int:
@@ -145,6 +202,8 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                     perf_mult * 100 if perf_mult is not None else None,
                 ))
 
+        # DO UPDATE: DRE stellt Tageswerte nachträglich richtig. DO NOTHING hätte
+        # den ersten — womöglich vorläufigen — Messwert dauerhaft festgeschrieben.
         async with conn.cursor() as cur:
             for r in rows:
                 await cur.execute(
@@ -153,12 +212,17 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                         (ts, node_id, provider_principal, blocks_produced, blocks_failed,
                          failure_rate_pct, uptime_pct)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (ts, node_id) DO NOTHING
+                    ON CONFLICT (ts, node_id) DO UPDATE SET
+                        provider_principal = EXCLUDED.provider_principal,
+                        blocks_produced    = EXCLUDED.blocks_produced,
+                        blocks_failed      = EXCLUDED.blocks_failed,
+                        failure_rate_pct   = EXCLUDED.failure_rate_pct,
+                        uptime_pct         = EXCLUDED.uptime_pct
                     """,
                     r,
                 )
+                total += cur.rowcount
         await conn.commit()
-        total += len(rows)
 
     return total
 

@@ -18,6 +18,7 @@ import neuron_poller
 import np_poller
 import ob_poller
 import okx_liq_poller
+import run_stamp
 import signal_engine
 import threshold_calculator
 import tick_collector
@@ -31,13 +32,55 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
+def _poller_name(coro_fn) -> str:
+    """z.B. tick_collector.run_market_data → 'tick_collector.run_market_data'."""
+    module = getattr(coro_fn, "__module__", "") or ""
+    name = getattr(coro_fn, "__qualname__", None) or getattr(coro_fn, "__name__", "unknown")
+    return f"{module}.{name}" if module else name
+
+
+async def _run_and_stamp(coro_fn, poller: str) -> None:
+    """
+    Führt den Poller aus und hinterlässt einen Lauf-Stempel in poller_runs
+    (MM-10 Schicht A) — auch und besonders im Fehlerfall.
+
+    rows_written wird nur gesetzt, wenn der Poller eine Zahl zurückgibt.
+    Sonst NULL: "nicht gemeldet" ist eine ehrlichere Aussage als eine
+    erfundene 0.
+    """
+    started = run_stamp.now()
+    rows: int | None = None
+    ok = False
+    err: str | None = None
+    try:
+        result = await coro_fn()
+        rows = result if isinstance(result, int) and not isinstance(result, bool) else None
+        ok = True
+    except Exception as e:
+        err = f"{type(e).__name__}: {e}"
+        log.error("poller error (%s): %s", poller, e)
+    finally:
+        await run_stamp.record_run(
+            poller=poller,
+            started_at=started,
+            finished_at=run_stamp.now(),
+            rows_written=rows,
+            ok=ok,
+            error=err,
+        )
+
+
 def run_async(coro_fn):
     """Wrapper so schedule (sync) can call async poller functions."""
+    poller = _poller_name(coro_fn)
+
     def _wrapper():
         try:
-            asyncio.run(coro_fn())
+            asyncio.run(_run_and_stamp(coro_fn, poller))
         except Exception as e:
-            log.error("poller error (%s): %s", coro_fn.__name__, e)
+            # _run_and_stamp fängt Poller-Fehler selbst; hier landet nur, was
+            # der Stempel-Pfad selbst wirft. Der Scheduler darf nie sterben.
+            log.error("run_async error (%s): %s", poller, e)
     return _wrapper
 
 
@@ -64,43 +107,36 @@ def main():
     schedule.every(5).minutes.do(run_async(master_agent.run))
     schedule.every().day.at("03:00").do(run_async(tick_collector.run_cleanup))
 
-    # Sofortiger Erstlauf
-    log.info("runner: initial run — np_poller")
-    asyncio.run(np_poller.run())
-
-    log.info("runner: initial run — wallet_tracker")
-    asyncio.run(wallet_tracker.run())
-
-    log.info("runner: initial run — neuron_poller")
-    asyncio.run(neuron_poller.run())
-
-    log.info("runner: initial run — master_agent")
-    asyncio.run(master_agent.run())
-
-    log.info("runner: initial run — ob_poller + tick_collector + liq_poller + okx_liq_poller + epz_calculator")
-    asyncio.run(ob_poller.run())
-    asyncio.run(tick_collector.run())
-    asyncio.run(liq_poller.run())
-    asyncio.run(okx_liq_poller.run())
-    asyncio.run(epz_calculator.run())
-
-    log.info("runner: initial run — market_data (funding + OI) + ohlcv backfill")
-    asyncio.run(tick_collector.run_market_data())
-    asyncio.run(tick_collector.run_ohlcv_backfill())
-
-    log.info("runner: initial run — volume_profile_calculator")
-    asyncio.run(volume_profile_calculator.run())
-
-    # Erstlauf Calculator — guarded: ein Crash darf den runner NICHT killen,
-    # sonst startet die schedule loop nie (vgl. okx_liq_poller-Incident 2026-05-29).
-    for _name, _fn in (("correlation_calculator", correlation_calculator.run),
-                       ("threshold_calculator", threshold_calculator.run)):
-        try:
-            log.info("runner: initial run — %s", _name)
-            asyncio.run(_fn())
-        except Exception:
-            log.exception("runner: initial run %s FAILED (continuing)", _name)
+    # ── Sofortiger Erstlauf ───────────────────────────────────────────────────
+    # ALLE Erstläufe laufen über run_async: einheitlich abgeschirmt und
+    # gestempelt. Vorher war nur der letzte Block gegen Abstürze geschützt
+    # (Lehre aus dem okx_liq_poller-Incident 2026-05-29) — die zehn Aufrufe
+    # davor konnten den runner weiterhin töten, bevor die schedule loop
+    # überhaupt startet. Und kein Erstlauf hinterließ eine Spur, wenn er
+    # scheiterte: genau der Startzeitpunkt, an dem man sie am meisten braucht.
+    #
+    # Reihenfolge ist bedeutsam: np_poller füllt np_providers, worauf
+    # wallet_tracker aufsetzt.
+    initial_runs = (
+        np_poller.run,
+        wallet_tracker.run,
+        neuron_poller.run,
+        master_agent.run,
+        ob_poller.run,
+        tick_collector.run,
+        liq_poller.run,
+        okx_liq_poller.run,
+        epz_calculator.run,
+        tick_collector.run_market_data,
+        tick_collector.run_ohlcv_backfill,
+        volume_profile_calculator.run,
+        correlation_calculator.run,
+        threshold_calculator.run,
+    )
     # data_watchdog: kein Erstlauf — erster Check nach 5min, wenn alle Poller laufen
+    for _fn in initial_runs:
+        log.info("runner: initial run — %s", _poller_name(_fn))
+        run_async(_fn)()
 
     log.info("runner: schedule loop started")
     log.info("  data_watchdog:        every 5min")
