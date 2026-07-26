@@ -195,16 +195,37 @@ def check_no_unnamed_index_with_if_not_exists(r: Result) -> None:
     (Ohne IF NOT EXISTS ist 'CREATE INDEX ON ...' gültig — Postgres generiert
     dann einen Namen. Das ist hier ausdrücklich nicht gemeint.)
     """
-    name = "Migrationen: kein CREATE INDEX IF NOT EXISTS ohne Namen"
-    hits = []
-    pattern = re.compile(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+ON\s", re.I)
+    name = "Migrationen: wiederholbares DDL, kein nacktes DROP"
+    unnamed, not_idem, naked_drop = [], [], []
+
+    p_unnamed = re.compile(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+ON\s", re.I)
+    p_not_idem = re.compile(r"CREATE\s+(?:TABLE|(?:UNIQUE\s+)?INDEX)\s+(?!IF\s+NOT\s+EXISTS)", re.I)
+    # Ein DROP am Zeilenanfang läuft unbedingt. Innerhalb eines DO-Blocks ist er
+    # eingerückt und durch eine IF-Bedingung geschützt — das ist der zulässige Fall.
+    p_naked_drop = re.compile(r"^DROP\s+(TABLE|INDEX)\s+(?!IF\s+EXISTS)", re.I)
+
     for sql in sorted(MIGRATIONS.glob("*.sql")):
         for i, line in enumerate(sql.read_text().splitlines(), 1):
             code = line.split("--", 1)[0]   # SQL-Kommentare ignorieren
-            if pattern.search(code):
-                hits.append(f"{sql.name}:{i}: {line.strip()}")
-    if hits:
-        r.fail(name, "\n".join(hits))
+            if p_unnamed.search(code):
+                unnamed.append(f"{sql.name}:{i}: {line.strip()}")
+            elif p_not_idem.search(code):
+                not_idem.append(f"{sql.name}:{i}: {line.strip()}")
+            if p_naked_drop.search(code):
+                naked_drop.append(f"{sql.name}:{i}: {line.strip()}")
+
+    problems = []
+    if unnamed:
+        problems.append("CREATE INDEX IF NOT EXISTS ohne Namen (Syntaxfehler):\n  "
+                        + "\n  ".join(unnamed))
+    if not_idem:
+        problems.append("CREATE ohne IF NOT EXISTS (bricht beim zweiten Lauf ab bzw. "
+                        "legt Duplikat-Indizes an):\n  " + "\n  ".join(not_idem))
+    if naked_drop:
+        problems.append("Unbedingtes DROP — scripts/migrate.sh läuft gegen die LIVE-DB, "
+                        "das würde echte Daten löschen:\n  " + "\n  ".join(naked_drop))
+    if problems:
+        r.fail(name, "\n".join(problems))
         return
     r.ok(name)
 
@@ -370,19 +391,20 @@ def check_panels_no_invented_values(r: Result) -> None:
 # ── Prüfungen mit Datenbank ───────────────────────────────────────────────────
 
 def check_migrations_and_queries(r: Result, dsn: str | None) -> None:
-    name_mig = "Migrationen laufen auf leerer DB durch"
-    name_q   = "Wächter-Queries laufen gegen das Migrations-Schema"
+    name_mig  = "Migrationen laufen auf leerer DB durch"
+    name_idem = "Migrationen sind wiederholbar (Doppellauf, keine Duplikat-Indizes)"
+    name_q    = "Wächter-Queries laufen gegen das Migrations-Schema"
 
     if not dsn:
-        r.skip(name_mig, "kein --dsn angegeben")
-        r.skip(name_q, "kein --dsn angegeben")
+        for n in (name_mig, name_idem, name_q):
+            r.skip(n, "kein --dsn angegeben")
         return
 
     try:
         import psycopg
     except ImportError:
-        r.skip(name_mig, "psycopg nicht installiert")
-        r.skip(name_q, "psycopg nicht installiert")
+        for n in (name_mig, name_idem, name_q):
+            r.skip(n, "psycopg nicht installiert")
         return
 
     files = sorted(MIGRATIONS.glob("*.sql"))
@@ -392,9 +414,62 @@ def check_migrations_and_queries(r: Result, dsn: str | None) -> None:
                 conn.execute(sql.read_text())
             except Exception as e:
                 r.fail(name_mig, f"{sql.name}: {e}")
-                r.skip(name_q, "Migrationen fehlgeschlagen")
+                for n in (name_idem, name_q):
+                    r.skip(n, "Migrationen fehlgeschlagen")
                 return
         r.ok(f"{name_mig} ({len(files)} Dateien)")
+
+        # ── Doppellauf ───────────────────────────────────────────────────────
+        # scripts/migrate.sh lässt ALLE Migrationen gegen die laufende DB
+        # durchlaufen. Das setzt Wiederholbarkeit voraus — und die war nicht
+        # gegeben: CREATE TABLE ohne IF NOT EXISTS brach ab, namenlose
+        # CREATE INDEX legten still Duplikate an, und Migration 003 hätte mit
+        # einem nackten DROP TABLE echte Daten gelöscht.
+        def snapshot() -> tuple[set, set, dict]:
+            tabs = {r0[0] for r0 in conn.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname='public'").fetchall()}
+            idx = {r0[0] for r0 in conn.execute(
+                "SELECT indexname FROM pg_indexes WHERE schemaname='public'").fetchall()}
+            # Zeilenzahlen mit: ein reiner Schema-Vergleich übersieht Seed-Daten,
+            # die sich vervielfachen. np_remuneration wuchs so auf 27 statt 9
+            # Zeilen — sein "ON CONFLICT DO NOTHING" hatte kein Konfliktziel und
+            # griff nie. Der erste Entwurf dieser Prüfung hat das durchgelassen.
+            counts = {t: conn.execute(f'SELECT count(*) FROM "{t}"').fetchone()[0]
+                      for t in sorted(tabs)}
+            return tabs, idx, counts
+
+        tabs_before, idx_before, counts_before = snapshot()
+
+        for sql in files:
+            try:
+                conn.execute(sql.read_text())
+            except Exception as e:
+                r.fail(name_idem, f"{sql.name} beim zweiten Lauf: {e}")
+                r.skip(name_q, "Doppellauf fehlgeschlagen")
+                return
+
+        tabs_after, idx_after, counts_after = snapshot()
+        problems = []
+        if tabs_after != tabs_before:
+            problems.append(f"Tabellen verändert: "
+                            f"+{sorted(tabs_after - tabs_before)} "
+                            f"-{sorted(tabs_before - tabs_after)}")
+        if idx_after != idx_before:
+            problems.append(f"Indizes verändert (Duplikate?): "
+                            f"+{sorted(idx_after - idx_before)} "
+                            f"-{sorted(idx_before - idx_after)}")
+        grown = {t: (counts_before.get(t), counts_after[t])
+                 for t in counts_after
+                 if counts_before.get(t) != counts_after[t]}
+        if grown:
+            problems.append("Seed-Daten vervielfacht:\n  " + "\n  ".join(
+                f"{t}: {a} → {b}" for t, (a, b) in sorted(grown.items())))
+        if problems:
+            r.fail(name_idem, "\n".join(problems))
+            return
+        seeded = sum(1 for v in counts_after.values() if v)
+        r.ok(f"{name_idem} — {len(tabs_after)} Tabellen, {len(idx_after)} Indizes, "
+             f"{seeded} Seed-Tabellen stabil")
 
         # Die Queries werden aus dem Quelltext gelesen, nicht abgeschrieben —
         # sonst prüft der Test die Abschrift statt den Code.

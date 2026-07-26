@@ -80,6 +80,39 @@ bash scripts/deploy.sh --hotfix     # überspringt Branch-Check
 
 ---
 
+## Migrationen — Deploy zieht das Schema NICHT mit
+
+**Das ist die wichtigste Falle im Projekt.**
+
+`docker-compose` mountet `./migrations` nach `/docker-entrypoint-initdb.d`.
+Postgres führt dieses Verzeichnis **nur aus, wenn das Datenverzeichnis leer
+ist** — also genau einmal, beim ersten Anlegen des Volumes. Bei einer laufenden
+Datenbank passiert nichts.
+
+Damit gilt: `docker compose up --build -d` und `git push devbox main` rollen
+**neuen Code ohne neues Schema** aus. Neuer Code, der eine neue Spalte erwartet,
+zerbricht dann beim nächsten Lauf.
+
+```bash
+bash scripts/migrate.sh            # Migrationen auf die Live-DB anwenden
+bash scripts/migrate.sh --dry-run  # nur auflisten
+```
+
+Alle Migrationen sind idempotent (`IF NOT EXISTS`), das Skript darf also
+jederzeit laufen. **Reihenfolge bei einem Deploy mit Schema-Änderung:**
+
+1. `bash scripts/migrate.sh` — erst das Schema
+2. `git push devbox main` — dann der Code
+3. `bash scripts/gate.sh` — Schema-Drift muss null sein
+
+Umgekehrt geht schief: der neue Code läuft dann kurzzeitig gegen das alte Schema.
+
+**Eine fehlgeschlagene Migration wird in der Datei selbst korrigiert**, nicht per
+Hand an der Datenbank nachgearbeitet — sonst driftet Repo gegen Live, und genau
+das war jahrelang der Fall (siehe `002_v06_schema.sql`).
+
+---
+
 ## Devbox als Git-Remote
 
 ```bash

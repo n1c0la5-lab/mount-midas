@@ -35,7 +35,14 @@ CREATE TABLE IF NOT EXISTS np_remuneration (
 );
 
 -- Seed-Daten: Gen-1.1 (Stand Mai 2026, ICP Wiki)
-INSERT INTO np_remuneration (hw_generation, geography, reward_xdr, notes) VALUES
+--
+-- "ON CONFLICT DO NOTHING" stand hier schon, hat aber nie gegriffen: die Tabelle
+-- hat nur einen Primary Key auf id, also gibt es keinen Konflikt, den es
+-- abfangen könnte. Drei Läufe von scripts/migrate.sh ergaben 27 statt 9 Zeilen.
+-- Daher jetzt "nur wenn leer", wie beim key_levels-Seed.
+-- Gefunden 2026-07-26 durch den Doppellauf-Test.
+INSERT INTO np_remuneration (hw_generation, geography, reward_xdr, notes)
+SELECT * FROM (VALUES
   ('gen1_1', 'CH',           1136, 'Schweiz — Gen-1.1 Post-48-Monats-Modell'),
   ('gen1_1', 'EU_other',     1061, 'EU (exkl. Schweiz/Slowenien) — Gen-1.1'),
   ('gen1_1', 'Slovenia',     1152, 'Slowenien — Gen-1.1'),
@@ -45,7 +52,8 @@ INSERT INTO np_remuneration (hw_generation, geography, reward_xdr, notes) VALUES
   ('gen1_1', 'Singapore',    1234, 'Singapur — Gen-1.1'),
   ('gen1_1', 'Japan',        1188, 'Japan — Gen-1.1'),
   ('gen1_1', 'non_eu_reloc', 1357, 'Nicht-EU Relokation (+10%) — Gen-1.1')
-ON CONFLICT DO NOTHING;
+) AS seed(hw_generation, geography, reward_xdr, notes)
+WHERE NOT EXISTS (SELECT 1 FROM np_remuneration);
 
 -- Tägliche Pflicht-Liquidierungsberechnung pro NP
 CREATE TABLE IF NOT EXISTS np_threshold_daily (

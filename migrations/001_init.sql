@@ -2,7 +2,12 @@
 -- Phase 1: Initial DB Setup
 
 -- Node Provider Stammdaten
-CREATE TABLE np_providers (
+-- Wiederholbar gemacht 2026-07-26 (MM-10): CREATE TABLE/INDEX ohne
+-- IF NOT EXISTS liess diese Migration beim zweiten Lauf abbrechen bzw. legte
+-- still Duplikat-Indizes an. Indexnamen sind aus der Live-DB uebernommen, damit
+-- Repo und Live konvergieren. Belegt durch scripts/gate.sh (Doppellauf).
+
+CREATE TABLE IF NOT EXISTS np_providers (
   principal        TEXT PRIMARY KEY,
   name             TEXT,
   node_count       INTEGER,
@@ -13,7 +18,7 @@ CREATE TABLE np_providers (
 );
 
 -- Alle Transaktionen von NP Principals (hop_depth 0-3+)
-CREATE TABLE wallet_movements (
+CREATE TABLE IF NOT EXISTS wallet_movements (
   id               BIGSERIAL PRIMARY KEY,
   from_principal   TEXT NOT NULL,
   to_principal     TEXT NOT NULL,
@@ -26,12 +31,12 @@ CREATE TABLE wallet_movements (
   hop_depth        INTEGER DEFAULT 0
 );
 
-CREATE INDEX ON wallet_movements (from_principal, ts);
-CREATE INDEX ON wallet_movements (to_principal, ts);
-CREATE INDEX ON wallet_movements (hop_depth);
+CREATE INDEX IF NOT EXISTS wallet_movements_from_principal_ts_idx ON wallet_movements (from_principal, ts);
+CREATE INDEX IF NOT EXISTS wallet_movements_to_principal_ts_idx ON wallet_movements (to_principal, ts);
+CREATE INDEX IF NOT EXISTS wallet_movements_hop_depth_idx ON wallet_movements (hop_depth);
 
 -- Zieladressen die von mehreren NPs angesteuert werden (Trading Desk Kandidaten)
-CREATE TABLE destination_clusters (
+CREATE TABLE IF NOT EXISTS destination_clusters (
   id               SERIAL PRIMARY KEY,
   to_principal     TEXT UNIQUE NOT NULL,
   np_count         INTEGER DEFAULT 0,
@@ -43,7 +48,7 @@ CREATE TABLE destination_clusters (
 );
 
 -- Binance Order Book Snapshots (±2% vom Mid-Price)
-CREATE TABLE ob_snapshots (
+CREATE TABLE IF NOT EXISTS ob_snapshots (
   id               BIGSERIAL PRIMARY KEY,
   ts               TIMESTAMPTZ NOT NULL,
   bid_depth_icp    NUMERIC,
@@ -52,10 +57,10 @@ CREATE TABLE ob_snapshots (
   mid_price_usdt   NUMERIC
 );
 
-CREATE INDEX ON ob_snapshots (ts DESC);
+CREATE INDEX IF NOT EXISTS ob_snapshots_ts_idx ON ob_snapshots (ts DESC);
 
 -- ICP/USDT Spot Tick Data — Rolling 90 Tage
-CREATE TABLE spot_trades (
+CREATE TABLE IF NOT EXISTS spot_trades (
   id               BIGSERIAL PRIMARY KEY,
   agg_trade_id     BIGINT UNIQUE,
   ts               TIMESTAMPTZ NOT NULL,
@@ -64,11 +69,11 @@ CREATE TABLE spot_trades (
   is_buyer_maker   BOOLEAN
 );
 
-CREATE INDEX ON spot_trades (ts DESC);
-CREATE INDEX ON spot_trades (price, ts);
+CREATE INDEX IF NOT EXISTS spot_trades_ts_idx ON spot_trades (ts DESC);
+CREATE INDEX IF NOT EXISTS spot_trades_price_ts_idx ON spot_trades (price, ts);
 
 -- ICP/USDT Perpetual Tick Data — Rolling 90 Tage
-CREATE TABLE perp_trades (
+CREATE TABLE IF NOT EXISTS perp_trades (
   id               BIGSERIAL PRIMARY KEY,
   agg_trade_id     BIGINT UNIQUE,
   ts               TIMESTAMPTZ NOT NULL,
@@ -77,11 +82,11 @@ CREATE TABLE perp_trades (
   is_buyer_maker   BOOLEAN
 );
 
-CREATE INDEX ON perp_trades (ts DESC);
-CREATE INDEX ON perp_trades (price, ts);
+CREATE INDEX IF NOT EXISTS perp_trades_ts_idx ON perp_trades (ts DESC);
+CREATE INDEX IF NOT EXISTS perp_trades_price_ts_idx ON perp_trades (price, ts);
 
 -- Perp/Spot Volume Ratio — minütlich aggregiert
-CREATE TABLE market_activity (
+CREATE TABLE IF NOT EXISTS market_activity (
   id                   BIGSERIAL PRIMARY KEY,
   ts                   TIMESTAMPTZ NOT NULL,
   spot_volume_icp      NUMERIC,
@@ -90,10 +95,10 @@ CREATE TABLE market_activity (
   activity_alert       BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX ON market_activity (ts DESC);
+CREATE INDEX IF NOT EXISTS market_activity_ts_idx ON market_activity (ts DESC);
 
 -- Coinglass Long/Short Liquidation Ratio (alle 15min)
-CREATE TABLE liquidation_snapshots (
+CREATE TABLE IF NOT EXISTS liquidation_snapshots (
   id               BIGSERIAL PRIMARY KEY,
   ts               TIMESTAMPTZ NOT NULL,
   long_liq_usd     NUMERIC,
@@ -102,10 +107,10 @@ CREATE TABLE liquidation_snapshots (
   skew_alert       BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX ON liquidation_snapshots (ts DESC);
+CREATE INDEX IF NOT EXISTS liquidation_snapshots_ts_idx ON liquidation_snapshots (ts DESC);
 
 -- Volume Profile: POC, VAH, VAL (täglich berechnet)
-CREATE TABLE volume_profile (
+CREATE TABLE IF NOT EXISTS volume_profile (
   id               SERIAL PRIMARY KEY,
   calculated_at    TIMESTAMPTZ DEFAULT NOW(),
   lookback_days    INTEGER NOT NULL,
@@ -115,10 +120,10 @@ CREATE TABLE volume_profile (
   total_volume_icp NUMERIC
 );
 
-CREATE INDEX ON volume_profile (calculated_at DESC);
+CREATE INDEX IF NOT EXISTS volume_profile_calculated_at_idx ON volume_profile (calculated_at DESC);
 
 -- Manuelle Support/Resistance Levels
-CREATE TABLE key_levels (
+CREATE TABLE IF NOT EXISTS key_levels (
   id          SERIAL PRIMARY KEY,
   price_usdt  NUMERIC NOT NULL,
   level_type  TEXT,
@@ -128,7 +133,7 @@ CREATE TABLE key_levels (
 );
 
 -- Signal-Ereignisse mit Score (Alert-Trigger)
-CREATE TABLE signal_log (
+CREATE TABLE IF NOT EXISTS signal_log (
   id               BIGSERIAL PRIMARY KEY,
   ts               TIMESTAMPTZ DEFAULT NOW(),
   score            INTEGER NOT NULL,
@@ -146,12 +151,23 @@ INSERT INTO destination_clusters (to_principal, np_count, total_icp, label, is_t
 VALUES
   ('64860a52...95fc9d', 1,  0, 'Sygnum Custody',               FALSE, NOW()),
   ('bef91947...93f5b6', 3,  0, 'Multi-NP Aggregator',          TRUE,  NOW()),
-  ('134a1847...613b41', 3,  0, 'Weiterleitungs-Hub ($900k+)',   TRUE,  NOW());
+  ('134a1847...613b41', 3,  0, 'Weiterleitungs-Hub ($900k+)',   TRUE,  NOW())
+-- Wiederholbar: ohne dies brach der zweite Lauf am Unique-Constraint ab.
+-- DO NOTHING, nicht DO UPDATE — die Labels sind inzwischen manuell gepflegt und
+-- dürfen vom Seed nicht überschrieben werden.
+ON CONFLICT (to_principal) DO NOTHING;
 
 -- Seed: Key Levels (manuell validiert, Mai 2026)
+--
+-- Wiederholbar über "nur wenn leer": key_levels hat keinen Unique-Constraint,
+-- ein ON CONFLICT griffe hier also nicht und ein zweiter Lauf hätte still
+-- Duplikate angelegt. Die Tabelle wird manuell gepflegt — sobald eine Zeile
+-- drin ist, hält sich der Seed heraus.
 INSERT INTO key_levels (price_usdt, level_type, formed_at, notes)
-VALUES
-  (4.093, 'sweep_high',  '2026-05-01', 'ATH Mai 2026 — Liquiditätssweep'),
-  (2.621, 'resistance',  '2026-04-17', 'Altes Hoch 08.04 + 17.04 — Support/Resistance Flip'),
-  (2.400, 'support',     '2026-04-01', 'POC Akkumulationsphase — starke Gravitationszone'),
-  (2.272, 'sweep_low',   '2026-04-08', 'Tief vor dem Pump');
+SELECT * FROM (VALUES
+  (4.093, 'sweep_high',  '2026-05-01'::date, 'ATH Mai 2026 — Liquiditätssweep'),
+  (2.621, 'resistance',  '2026-04-17'::date, 'Altes Hoch 08.04 + 17.04 — Support/Resistance Flip'),
+  (2.400, 'support',     '2026-04-01'::date, 'POC Akkumulationsphase — starke Gravitationszone'),
+  (2.272, 'sweep_low',   '2026-04-08'::date, 'Tief vor dem Pump')
+) AS seed(price_usdt, level_type, formed_at, notes)
+WHERE NOT EXISTS (SELECT 1 FROM key_levels);
