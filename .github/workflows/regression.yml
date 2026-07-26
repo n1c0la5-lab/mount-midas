@@ -1,0 +1,56 @@
+name: MM-10 Regression-Gate
+
+# Der Wächter darf nicht der einzige ungeprüfte Pfad im Projekt sein.
+# Lehre aus TrendRider: ein Guard, der nur im Cron läuft, zerbricht genau an
+# dem Fall, für den er gebaut wurde.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Gleiche Hauptversion wie die Devbox (postgres:16-alpine).
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mount_midas
+          POSTGRES_PASSWORD: gate
+          POSTGRES_DB: mm_gate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mount_midas -d mm_gate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: psycopg installieren
+        run: pip install --quiet "psycopg[binary]"
+
+      - name: Python-Syntax aller Poller
+        run: |
+          for f in pollers/*.py; do
+            python -m py_compile "$f" || exit 1
+          done
+          echo "alle Poller kompilieren"
+
+      - name: Regression-Check (statisch + Migrationen + Wächter-Queries)
+        run: |
+          python scripts/regression_check.py \
+            --dsn "postgresql://mount_midas:gate@localhost:5432/mm_gate"
+
+      # Der Schema-Drift-Vergleich gegen die Live-DB läuft NICHT hier — die
+      # Devbox ist von GitHub aus nicht erreichbar. Er steckt in
+      # scripts/gate.sh und damit im Deploy-Pfad (scripts/deploy.sh, Gate 4).

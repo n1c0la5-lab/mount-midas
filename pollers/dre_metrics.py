@@ -78,34 +78,51 @@ def _month_end(reward_period: str) -> datetime:
     return datetime(y, m, 1, tzinfo=timezone.utc)
 
 
-async def is_period_done(conn, reward_period: str) -> bool:
+def is_period_complete(
+    reward_period: str,
+    now: datetime,
+    last_fetched_at: datetime | None,
+) -> bool:
     """
-    Ein Monat ist erst fertig, wenn er abgeschlossen IST und NACH seinem Ende
-    gelesen wurde.
+    Reine Entscheidung: ist dieser Monat endgültig gespeichert?
 
-    Der laufende Monat wächst: Belohnungen akkumulieren, Tagesmetriken kommen
-    hinzu. Die alte Prüfung ("existiert irgendeine Zeile für den Monat?") hat
-    den ersten Zwischenstand als "fertig" abgestempelt und den Monat damit für
-    seine restliche Laufzeit gesperrt — np_performance stand 12 Tage still
-    (MM-10 Defekt 1).
+    Bewusst ohne DB-Zugriff, damit das Gate echtes Verhalten prüfen kann und
+    nicht nur, ob die richtigen Wörter im Quelltext stehen.
 
-    Die Vollständigkeit hängt an fetched_at, nicht an der Existenz: ein Monat,
-    der nur mitten in seiner Laufzeit gelesen wurde, bleibt unvollständig und
-    wird nach Monatsende genau einmal nachgeholt.
+    Drei Fälle, die alle einmal falsch waren oder es beinahe wurden:
+
+    1. Laufender Monat → NIE fertig. Belohnungen akkumulieren, Tagesmetriken
+       kommen hinzu. Die alte Prüfung ("existiert irgendeine Zeile?") hat den
+       ersten Zwischenstand als fertig abgestempelt und den Monat für seine
+       restliche Laufzeit gesperrt — np_performance stand 12 Tage still
+       (MM-10 Defekt 1).
+    2. Abgeschlossener Monat, aber nur MITTEN in seiner Laufzeit gelesen →
+       ebenfalls nicht fertig. Sonst bliebe der Juli für immer halb: am 1.8.
+       wäre er "abgeschlossen und vorhanden" und würde nie nachgeholt.
+    3. Abgeschlossener Monat, nach Monatsende gelesen → fertig.
     """
-    if datetime.now(timezone.utc) < _month_end(reward_period):
+    end = _month_end(reward_period)
+    # Regel 1 ist streng genommen redundant: ein Lesevorgang mitten im Monat
+    # liegt immer vor dem Monatsende, weshalb schon die letzte Zeile False
+    # liefert. Sie bleibt stehen, weil sie die Absicht ausspricht — aber wer sie
+    # entfernt, ändert kein Verhalten (im Gate geprüft).
+    if now < end:
         return False
+    if last_fetched_at is None:
+        return False
+    return last_fetched_at >= end
 
+
+async def is_period_done(conn, reward_period: str) -> bool:
+    """DB-Hülle um is_period_complete()."""
     async with conn.cursor() as cur:
         await cur.execute(
-            """
-            SELECT 1 FROM np_reward_mints
-            WHERE reward_period = %s AND fetched_at >= %s
-            LIMIT 1
-            """,
-            (reward_period, _month_end(reward_period)),
+            "SELECT MAX(fetched_at) FROM np_reward_mints WHERE reward_period = %s",
+            (reward_period,),
         )
-        return await cur.fetchone() is not None
+        row = await cur.fetchone()
+    last_fetched_at = row[0] if row else None
+    return is_period_complete(reward_period, datetime.now(timezone.utc), last_fetched_at)
 
 
 async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int:

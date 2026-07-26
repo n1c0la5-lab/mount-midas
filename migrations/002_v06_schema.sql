@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS xdr_rates (
   rate       NUMERIC NOT NULL,   -- XDR/USD
   source     TEXT DEFAULT 'imf'
 );
-CREATE INDEX IF NOT EXISTS ON xdr_rates (ts DESC);
+-- Index-Name war vergessen ("CREATE INDEX IF NOT EXISTS ON xdr_rates ...") —
+-- reiner Syntaxfehler, das Statement hat nie funktioniert. Mit ON_ERROR_STOP
+-- brach 002 hier ab, wodurch die folgenden 60 Zeilen bei einem Frisch-Setup
+-- nie liefen. Gefunden 2026-07-26 beim Aufbau des MM-10-Migrationstests.
+CREATE INDEX IF NOT EXISTS idx_xdr_rates_ts ON xdr_rates (ts DESC);
 
 -- Offizielle NNS-Remuneration-Tabelle (statisch, nur bei NNS-Proposals updaten)
 CREATE TABLE IF NOT EXISTS np_remuneration (
@@ -61,8 +65,8 @@ CREATE TABLE IF NOT EXISTS np_threshold_daily (
   geography           TEXT NOT NULL,
   hw_generation       TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS ON np_threshold_daily (ts DESC);
-CREATE INDEX IF NOT EXISTS ON np_threshold_daily (principal, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_np_threshold_ts ON np_threshold_daily (ts DESC);
+CREATE INDEX IF NOT EXISTS idx_np_threshold_principal ON np_threshold_daily (principal, ts DESC);
 
 -- Netzwerkweiter Sell-Pressure (Tages-Aggregat)
 CREATE TABLE IF NOT EXISTS threshold_aggregate_daily (
@@ -79,4 +83,4 @@ CREATE TABLE IF NOT EXISTS threshold_aggregate_daily (
   mandatory_sell_at_3usd   NUMERIC,
   mandatory_sell_at_5usd   NUMERIC
 );
-CREATE INDEX IF NOT EXISTS ON threshold_aggregate_daily (ts DESC);
+CREATE INDEX IF NOT EXISTS idx_threshold_agg_ts ON threshold_aggregate_daily (ts DESC);

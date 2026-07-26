@@ -27,6 +27,10 @@ async def _fetch() -> list[dict]:
 
 
 async def _upsert(providers: list[dict]) -> int:
+    # Rückgabe ist cur.rowcount, nicht len(providers). Bei DO UPDATE sind die
+    # beiden Zahlen zwar gleich — aber "zufällig richtig" ist keine Eigenschaft,
+    # auf die sich der Lauf-Stempel stützen sollte (MM-10).
+    written = 0
     async with await psycopg.AsyncConnection.connect(_DSN) as conn:
         async with conn.cursor() as cur:
             for p in providers:
@@ -45,8 +49,9 @@ async def _upsert(providers: list[dict]) -> int:
                         p.get("total_rewardable_nodes", 0),
                     ),
                 )
+                written += cur.rowcount
         await conn.commit()
-    return len(providers)
+    return written
 
 
 async def run() -> None:
