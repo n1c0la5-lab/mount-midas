@@ -31,10 +31,20 @@ REPO = Path(__file__).resolve().parent.parent
 POLLERS = REPO / "pollers"
 MIGRATIONS = REPO / "migrations"
 
-# Tabellen, die bewusst NICHT vom Wächter beobachtet werden, mit Begründung.
-# Wer hier etwas einträgt, muss den Grund nennen — eine leere Ausnahme ist
-# genau die Lücke, die MM-10 geschlossen hat.
-WATCHDOG_EXEMPT: dict[str, str] = {}
+def _frische_ausgenommen() -> set[str]:
+    """
+    Die dokumentierten Frische-Ausnahmen, gelesen aus data_watchdog.py selbst.
+
+    Bewusst keine zweite Liste hier: eine Ausnahme, die an zwei Stellen gepflegt
+    werden muss, driftet. Und jede Ausnahme dort MUSS eine Begründung tragen —
+    das prüft check_watchdog_completeness mit.
+    """
+    text = (POLLERS / "data_watchdog.py").read_text()
+    part = text.split("FRISCHE_AUSGENOMMEN: dict[str, str] = {", 1)
+    if len(part) != 2:
+        return set()
+    body = part[1].split("\n}", 1)[0]
+    return {m.group(1) for m in re.finditer(r'^\s*"([a-z_]+)":', body, re.M)}
 
 # Tabellen, die über dynamisches SQL beschrieben werden (Tabellenname als
 # Variable), weshalb die INSERT-INTO-Suche sie nicht findet. Pro Poller-Datei
@@ -114,6 +124,7 @@ def check_watchdog_completeness(r: Result) -> None:
     name = "Wächter-Vollständigkeit: jede poller-geschriebene Tabelle ist bewacht"
     written, undeclared = _poller_written_tables()
     watched = _watchdog_sources()
+    exempt = _frische_ausgenommen()
 
     if undeclared:
         r.fail(name, "Dynamischer INSERT (Tabellenname als Variable), aber nicht in "
@@ -121,7 +132,7 @@ def check_watchdog_completeness(r: Result) -> None:
         return
 
     missing = {t: sorted(v) for t, v in written.items()
-               if t not in watched and t not in WATCHDOG_EXEMPT}
+               if t not in watched and t not in exempt}
     if missing:
         detail = "\n".join(f"{t} — geschrieben von {', '.join(v)}" for t, v in sorted(missing.items()))
         r.fail(name, f"Nicht in data_watchdog.SOURCES:\n{detail}")
@@ -129,12 +140,22 @@ def check_watchdog_completeness(r: Result) -> None:
 
     # Gegenrichtung: eine bewachte Tabelle, die niemand schreibt, ist ein
     # Tippfehler oder toter Code — der Wächter wäre dort dauerhaft rot.
-    orphan = sorted(watched - set(written) - set(WATCHDOG_EXEMPT))
+    orphan = sorted(watched - set(written) - exempt)
     if orphan:
         r.fail(name, "Bewacht, aber von keinem Poller beschrieben: " + ", ".join(orphan))
         return
 
-    r.ok(f"{name} ({len(watched)} Quellen)")
+    # Jede Ausnahme braucht eine Begruendung im Quelltext. Eine stumme Ausnahme
+    # waere genau die Luecke, die diese Pruefung schliessen soll.
+    wd = (POLLERS / "data_watchdog.py").read_text()
+    for t in sorted(exempt):
+        block = re.search(rf'"{t}":\s*\n?\s*"([^"]{{40,}})', wd, re.S)
+        if not block:
+            r.fail(name, f"Frische-Ausnahme '{t}' ohne verstaendliche Begruendung "
+                         f"(mindestens ein Satz erwartet)")
+            return
+    suffix = f", {len(exempt)} begruendete Ausnahme(n)" if exempt else ""
+    r.ok(f"{name} ({len(watched)} Quellen{suffix})")
 
 
 def check_poller_names_match_runner(r: Result) -> None:

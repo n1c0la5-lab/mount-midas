@@ -307,8 +307,9 @@ async def track_account(
     return await upsert_batch(conn, movements)
 
 
-async def run() -> None:
+async def run() -> int:
     log.info("wallet_tracker: start")
+    written = 0
     async with await psycopg.AsyncConnection.connect(_DSN) as conn:
 
         await seed_wallet_labels(conn)
@@ -333,6 +334,7 @@ async def run() -> None:
                     log.info("hop0: %s → %d movements", principal[:24], n)
                 n0 += n
             log.info("wallet_tracker: hop0 done — %d new", n0)
+            written += n0
 
             # ── Hop 1–3: Follow the chain ─────────────────────────────────────
             for hop in range(3):
@@ -350,6 +352,7 @@ async def run() -> None:
                         log.info("hop%d: %s → %d movements", hop + 1, dest_account_id[:16], n)
                     total += n
                 log.info("wallet_tracker: hop%d done — %d new", hop + 1, total)
+                written += total
 
         await refresh_clusters(conn)
 
@@ -359,7 +362,8 @@ async def run() -> None:
             for c in candidates[:10]:
                 log.info("  kandidat: %s | NPs: %d | ICP: %.0f", c["principal"][:32], c["np_count"], c["total_icp"])
 
-    log.info("wallet_tracker: done")
+    log.info("wallet_tracker: done — %d neue Bewegungen", written)
+    return written
 
 
 if __name__ == "__main__":

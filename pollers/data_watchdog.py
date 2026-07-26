@@ -136,7 +136,12 @@ SOURCES: dict[str, Source] = {
     "neuron_dissolve_snapshots": Source(
         "SELECT MAX(ts) FROM neuron_dissolve_snapshots",                         2 * HOUR, "takt"),
     # Täglich
-    "ohlcv_daily":        Source("SELECT MAX(date)::timestamptz FROM ohlcv_daily", 30 * HOUR, "takt"),
+    # ohlcv_daily: `date` ist ein TAGESDATUM, kein Schreibzeitpunkt. Der Lauf um
+    # 00:05 schreibt die Kerze des VORTAGS mit date = Vortag 00:00. Damit ist
+    # max(date) strukturell zwischen 24h und 48h "alt", ohne dass etwas fehlt —
+    # beim ersten scharfen Lauf schlug die 30h-Schwelle bei 35.7h prompt an.
+    # 60h = zwei verpasste Läufe plus Puffer, gemessen an der Struktur der Spalte.
+    "ohlcv_daily":        Source("SELECT MAX(date)::timestamptz FROM ohlcv_daily", 60 * HOUR, "takt"),
     # updated_at, NICHT last_mint_at: np_poller setzt updated_at bei jedem
     # Upsert, last_mint_at ist bei allen 104 Zeilen NULL (tote Spalte, MM-10
     # "Offene Punkte"). Ein Frische-Check darauf wäre dauerhaft rot.
@@ -161,7 +166,18 @@ SOURCES: dict[str, Source] = {
     "wallet_movements":   Source("SELECT MAX(ts) FROM wallet_movements",         48 * HOUR, "event"),
     "destination_clusters": Source(
         "SELECT MAX(first_seen_at) FROM destination_clusters",                   14 * DAY,  "event"),
-    "np_wallet_labels":   Source("SELECT MAX(added_at) FROM np_wallet_labels",   30 * DAY,  "event"),
+    # np_wallet_labels bewusst NICHT hier: siehe FRISCHE_AUSGENOMMEN.
+}
+
+# Poller-geschriebene Tabellen ohne Frische-Prüfung — mit Begründung, denn eine
+# stumme Ausnahme ist genau die Lücke, die MM-10 geschlossen hat. Ihre Poller
+# stehen weiter unter der Lauf-Wache (Schicht A).
+FRISCHE_AUSGENOMMEN: dict[str, str] = {
+    "np_wallet_labels":
+        "Manuell gepflegte Exchange-Labels. seed_wallet_labels() legt nur NEUE "
+        "Labels an, added_at bleibt sonst stehen — 63 Tage ohne neues Label sind "
+        "der Normalfall, kein Defekt. Beim ersten scharfen Lauf schlug eine "
+        "30-Tage-Schwelle hier sofort falsch an.",
 }
 
 # ── Schicht A: Lauf-Stempel ───────────────────────────────────────────────────
@@ -316,6 +332,18 @@ async def _check_runs(conn, now: datetime) -> list[tuple[str, float | None, int]
     """
     stale: list[tuple[str, float | None, int]] = []
 
+    # Wie lange sammelt poller_runs überhaupt schon? Ohne diese Frage meldet die
+    # Lauf-Wache nach jedem Container-Neustart JEDEN täglichen Poller als tot —
+    # er KANN dort noch keine Historie haben. Beim ersten scharfen Lauf traf das
+    # dre_metrics, tick_collector.run_ohlcv und run_cleanup gleichzeitig.
+    # Fehlende Historie ist keine Aussage über einen Ausfall (NULL ≠ neutral).
+    try:
+        row = await (await conn.execute("SELECT MIN(started_at) FROM poller_runs")).fetchone()
+        sammelt_seit = row[0] if row else None
+    except Exception as e:
+        log.error("data_watchdog: poller_runs nicht lesbar: %s", e)
+        return stale
+
     for poller, max_pause in POLLER_CADENCE.items():
         try:
             row = await (await conn.execute(
@@ -329,7 +357,15 @@ async def _check_runs(conn, now: datetime) -> list[tuple[str, float | None, int]
         last_run = row[0] if row else None
         if last_run is None:
             age_min = None
-            is_stale = True
+            # Erst wenn die Wache länger sammelt als der erlaubte Abstand, ist
+            # das Fehlen eines Erfolgslaufs eine Aussage.
+            beobachtet_min = (((now - sammelt_seit).total_seconds() / 60)
+                              if sammelt_seit else 0)
+            is_stale = beobachtet_min > max_pause
+            if not is_stale:
+                log.info("data_watchdog: %s — noch keine Historie "
+                         "(Wache sammelt seit %s, erlaubt %s)",
+                         poller, _fmt_age(beobachtet_min), _fmt_age(max_pause))
         else:
             age_min = round((now - last_run).total_seconds() / 60, 1)
             is_stale = age_min > max_pause

@@ -229,8 +229,9 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-async def run() -> None:
+async def run() -> int:
     log.info("dre_metrics: start")
+    written = 0
 
     today = date.today()
     # Check current month and previous month — reward periods may span calendar boundaries
@@ -256,9 +257,13 @@ async def run() -> None:
 
                 n_mints = await insert_reward_mints(conn, period_dir, month)
                 n_perf = await insert_np_performance(conn, period_dir)
+                written += n_mints + n_perf
                 log.info("dre_metrics: %s — %d providers, %d performance rows", month, n_mints, n_perf)
 
-    log.info("dre_metrics: done")
+    # 0 zurueckgeben ist hier AUSSAGEKRAEFTIG: es heisst "lief, hat aber nichts
+    # geschrieben" — genau der Zustand, der 12 Tage unentdeckt blieb.
+    log.info("dre_metrics: done — %d Zeilen geschrieben", written)
+    return written
 
 
 if __name__ == "__main__":

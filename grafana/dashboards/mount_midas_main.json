@@ -29,421 +29,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 740,
-      "panels": [],
-      "title": "Wächter — Datenlage (MM-10)",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Minuten seit dem letzten data_watchdog-Durchlauf. Diese Kachel ist die wichtigste der Zeile: sie beantwortet, ob den anderen Kacheln überhaupt zu glauben ist. Steht sie rot, sind die Zahlen rechts davon veraltet.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 20
-              },
-              {
-                "color": "red",
-                "value": 60
-              }
-            ]
-          },
-          "unit": "m"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 0,
-        "y": 1
-      },
-      "id": 741,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ts)))/60 AS value FROM system_health",
-          "refId": "A"
-        }
-      ],
-      "title": "Wächter — letzter Lauf",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Kann der Wächter seine Befunde überhaupt zustellen? 'Aktiv' heißt: TELEGRAM_TOKEN und TELEGRAM_CHAT_ID sind gesetzt. 'STUMM' heißt: alles rechts davon ist zwar korrekt, erfährt aber niemand.\n\nDiese Kachel existiert, weil der Kanal am 2026-07-04 stummgeschaltet wurde (zu enge Schwellen hatten ihn zugemüllt) und der Wächter danach wochenlang richtig erkannt und geschwiegen hat — unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher als keiner, weil das Dashboard grün bleibt.\n\nZeigt bewusst 'No data', wenn der Wächter selbst seit über 30 Minuten nichts geschrieben hat — ein alter Kanal-Befund ist keine Aussage über jetzt. Warum er schweigt, sagt die Kachel links.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "Aktiv"
-                },
-                "1": {
-                  "color": "red",
-                  "index": 1,
-                  "text": "STUMM"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 4,
-        "y": 1
-      },
-      "id": 745,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
-          "refId": "A"
-        }
-      ],
-      "title": "Alarmkanal",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Anzahl der Datenquellen, deren neuester Datenpunkt älter ist als der für sie vereinbarte Takt. 0 heißt: alle 26 überwachten Tabellen sind frisch. Kein Wert ('No data') heißt: der Wächter hat in den letzten 30 Minuten nichts geschrieben — dann gilt die Kachel links.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 7,
-        "y": 1
-      },
-      "id": 742,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source NOT LIKE 'lauf:%' AND source NOT LIKE 'kanal:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
-          "refId": "A"
-        }
-      ],
-      "title": "Quellen stale",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Anzahl der Poller, deren letzter ERFOLGREICHER Lauf länger zurückliegt als erlaubt (Schicht A, poller_runs). Ein Poller, der nur noch mit Fehler durchläuft, zählt als still — sonst würde ein Dauerfehler als Gesundheit gelesen.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 11,
-        "y": 1
-      },
-      "id": 743,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value_and_name",
-        "wideLayout": true
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source LIKE 'lauf:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
-          "refId": "A"
-        }
-      ],
-      "title": "Poller still",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "mount_midas_pg"
-      },
-      "description": "Nur die Quellen und Poller, bei denen gerade etwas nicht stimmt. Leer ist der gute Zustand. Bewusst OHNE Ersatztext bei leerem Ergebnis: 'keine Befunde' wäre eine Behauptung, die auch dann erscheint, wenn der Wächter selbst tot ist. Die Lebendigkeit steht links.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "left",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": false,
-            "inspect": false
-          },
-          "mappings": []
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Quelle"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 240
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Alter (h)"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 100
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Schwelle (h)"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 9,
-        "x": 15,
-        "y": 1
-      },
-      "id": 744,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": []
-      },
-      "pluginVersion": "13.0.1+security-01",
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "mount_midas_pg"
-          },
-          "format": "table",
-          "rawSql": "SELECT CASE WHEN source LIKE 'lauf:%'  THEN 'Poller: ' || SUBSTRING(source FROM 6) WHEN source LIKE 'kanal:%' THEN 'ALARMKANAL STUMM (' || SUBSTRING(source FROM 7) || ')' ELSE source END AS \"Quelle\", last_data_ts AS \"Letzter Stempel\", ROUND(age_minutes / 60.0, 1) AS \"Alter (h)\", ROUND(threshold_min / 60.0, 1) AS \"Schwelle (h)\" FROM ( SELECT DISTINCT ON (source) * FROM system_health WHERE ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x WHERE is_stale ORDER BY age_minutes DESC NULLS FIRST",
-          "refId": "A"
-        }
-      ],
-      "title": "Befunde — was gerade nicht stimmt",
-      "type": "table"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 5
-      },
-      "id": 731,
+      "id": 746,
       "title": "Regime — Marktphase",
       "type": "row"
     },
@@ -487,7 +73,7 @@
         "h": 5,
         "w": 3,
         "x": 0,
-        "y": 6
+        "y": 1
       },
       "id": 14,
       "options": {
@@ -573,7 +159,7 @@
         "h": 5,
         "w": 3,
         "x": 3,
-        "y": 6
+        "y": 1
       },
       "id": 15,
       "options": {
@@ -661,7 +247,7 @@
         "h": 5,
         "w": 3,
         "x": 6,
-        "y": 6
+        "y": 1
       },
       "id": 3,
       "options": {
@@ -740,7 +326,7 @@
         "h": 5,
         "w": 3,
         "x": 9,
-        "y": 6
+        "y": 1
       },
       "id": 2,
       "options": {
@@ -829,7 +415,7 @@
         "h": 5,
         "w": 3,
         "x": 12,
-        "y": 6
+        "y": 1
       },
       "id": 4,
       "options": {
@@ -934,7 +520,7 @@
         "h": 5,
         "w": 2,
         "x": 15,
-        "y": 6
+        "y": 1
       },
       "id": 618,
       "options": {
@@ -1041,7 +627,7 @@
         "h": 5,
         "w": 2,
         "x": 17,
-        "y": 6
+        "y": 1
       },
       "id": 619,
       "options": {
@@ -1087,7 +673,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 6
       },
       "id": 604,
       "options": {
@@ -1189,7 +775,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 20
       },
       "id": 609,
       "options": {
@@ -1374,7 +960,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 30
       },
       "id": 27,
       "options": {
@@ -1624,7 +1210,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 38
       },
       "id": 25,
       "options": {
@@ -1820,7 +1406,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 48
       },
       "id": 616,
       "options": {
@@ -1885,9 +1471,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 56
       },
-      "id": 732,
+      "id": 747,
       "title": "Institutional Flow — TWAP Detection",
       "type": "row"
     },
@@ -2126,7 +1712,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 62
+        "y": 57
       },
       "id": 603,
       "options": {
@@ -2353,7 +1939,7 @@
         "h": 8,
         "w": 14,
         "x": 0,
-        "y": 70
+        "y": 65
       },
       "id": 602,
       "options": {
@@ -2530,7 +2116,7 @@
         "h": 8,
         "w": 10,
         "x": 14,
-        "y": 70
+        "y": 65
       },
       "id": 403,
       "options": {
@@ -2571,9 +2157,430 @@
         "h": 1,
         "w": 24,
         "x": 0,
+        "y": 73
+      },
+      "id": 748,
+      "title": "Wächter — Datenlage (MM-10)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Minuten seit dem letzten data_watchdog-Durchlauf. Diese Kachel ist die wichtigste der Zeile: sie beantwortet, ob den anderen Kacheln überhaupt zu glauben ist. Steht sie rot, sind die Zahlen rechts davon veraltet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "unit": "m"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 74
+      },
+      "id": 741,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ts)))/60 AS value FROM system_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Wächter — letzter Lauf",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Anzahl der Datenquellen, deren neuester Datenpunkt älter ist als der für sie vereinbarte Takt. 0 heißt: alle 26 überwachten Tabellen sind frisch. Kein Wert ('No data') heißt: der Wächter hat in den letzten 30 Minuten nichts geschrieben — dann gilt die Kachel links.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 74
+      },
+      "id": 742,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source NOT LIKE 'lauf:%' AND source NOT LIKE 'kanal:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Quellen stale",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Nur die Quellen und Poller, bei denen gerade etwas nicht stimmt. Leer ist der gute Zustand. Bewusst OHNE Ersatztext bei leerem Ergebnis: 'keine Befunde' wäre eine Behauptung, die auch dann erscheint, wenn der Wächter selbst tot ist. Die Lebendigkeit steht links.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Quelle"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 240
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alter (h)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schwelle (h)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 7,
+        "x": 6,
+        "y": 74
+      },
+      "id": 744,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN source LIKE 'lauf:%'  THEN 'Poller: ' || SUBSTRING(source FROM 6) WHEN source LIKE 'kanal:%' THEN 'ALARMKANAL STUMM (' || SUBSTRING(source FROM 7) || ')' ELSE source END AS \"Quelle\", last_data_ts AS \"Letzter Stempel\", ROUND(age_minutes / 60.0, 1) AS \"Alter (h)\", ROUND(threshold_min / 60.0, 1) AS \"Schwelle (h)\" FROM ( SELECT DISTINCT ON (source) * FROM system_health WHERE ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x WHERE is_stale ORDER BY age_minutes DESC NULLS FIRST",
+          "refId": "A"
+        }
+      ],
+      "title": "Befunde — was gerade nicht stimmt",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Anzahl der Poller, deren letzter ERFOLGREICHER Lauf länger zurückliegt als erlaubt (Schicht A, poller_runs). Ein Poller, der nur noch mit Fehler durchläuft, zählt als still — sonst würde ein Dauerfehler als Gesundheit gelesen.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
         "y": 78
       },
-      "id": 733,
+      "id": 743,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source LIKE 'lauf:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Poller still",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "mount_midas_pg"
+      },
+      "description": "Kann der Wächter seine Befunde überhaupt zustellen? 'Aktiv' heißt: TELEGRAM_TOKEN und TELEGRAM_CHAT_ID sind gesetzt. 'STUMM' heißt: alles rechts davon ist zwar korrekt, erfährt aber niemand.\n\nDiese Kachel existiert, weil der Kanal am 2026-07-04 stummgeschaltet wurde (zu enge Schwellen hatten ihn zugemüllt) und der Wächter danach wochenlang richtig erkannt und geschwiegen hat — unter anderem einen 31-Stunden-Ausfall. Ein stummer Wächter ist gefährlicher als keiner, weil das Dashboard grün bleibt.\n\nZeigt bewusst 'No data', wenn der Wächter selbst seit über 30 Minuten nichts geschrieben hat — ein alter Kanal-Befund ist keine Aussage über jetzt. Warum er schweigt, sagt die Kachel links.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Aktiv"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "STUMM"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 78
+      },
+      "id": 745,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "13.0.1+security-01",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "mount_midas_pg"
+          },
+          "format": "table",
+          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Alarmkanal",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "id": 749,
       "title": "Ops & Signal",
       "type": "row"
     },
@@ -2718,7 +2725,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 79
+        "y": 85
       },
       "id": 5,
       "options": {
@@ -2750,7 +2757,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 79
+        "y": 85
       },
       "id": 6,
       "options": {
@@ -2904,7 +2911,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 79
+        "y": 85
       },
       "id": 402,
       "options": {
@@ -2952,9 +2959,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 95
       },
-      "id": 734,
+      "id": 750,
       "title": "Korrelation & Edge",
       "type": "row"
     },
@@ -2994,7 +3001,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 90
+        "y": 96
       },
       "id": 21,
       "options": {
@@ -3065,7 +3072,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 90
+        "y": 96
       },
       "id": 22,
       "options": {
@@ -3133,7 +3140,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 90
+        "y": 96
       },
       "id": 23,
       "options": {
@@ -3204,7 +3211,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 90
+        "y": 96
       },
       "id": 24,
       "options": {
@@ -3245,9 +3252,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 100
       },
-      "id": 735,
+      "id": 751,
       "title": "NP-Analyse",
       "type": "row"
     },
@@ -3334,7 +3341,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 95
+        "y": 101
       },
       "id": 302,
       "options": {
@@ -3432,7 +3439,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 95
+        "y": 101
       },
       "id": 303,
       "options": {
@@ -3606,7 +3613,7 @@
         "h": 10,
         "w": 6,
         "x": 0,
-        "y": 101
+        "y": 107
       },
       "id": 301,
       "options": {
@@ -3708,7 +3715,7 @@
         "h": 10,
         "w": 10,
         "x": 6,
-        "y": 101
+        "y": 107
       },
       "id": 304,
       "options": {
@@ -3788,7 +3795,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 101
+        "y": 107
       },
       "id": 305,
       "options": {
@@ -3822,9 +3829,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 111
+        "y": 117
       },
-      "id": 736,
+      "id": 752,
       "title": "Orderflow — Delta & CVD  (200-Tick · $source)",
       "type": "row"
     },
@@ -3838,7 +3845,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 112
+        "y": 118
       },
       "id": 720,
       "options": {
@@ -3893,9 +3900,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 126
+        "y": 132
       },
-      "id": 737,
+      "id": 753,
       "title": "Orderflow — Order Book Imbalance & Spread  (200-Tick-aligned · Binance)",
       "type": "row"
     },
@@ -3909,7 +3916,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 127
+        "y": 133
       },
       "id": 721,
       "options": {
@@ -3975,9 +3982,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 139
+        "y": 145
       },
-      "id": 738,
+      "id": 754,
       "title": "Orderflow — Footprint  (100-Tick · $source)",
       "type": "row"
     },
@@ -3991,7 +3998,7 @@
         "h": 18,
         "w": 24,
         "x": 0,
-        "y": 140
+        "y": 146
       },
       "id": 730,
       "options": {
@@ -4235,5 +4242,5 @@
   "timezone": "browser",
   "title": "Mount Midas",
   "uid": "mount-midas-main",
-  "version": 158
+  "version": 160
 }
