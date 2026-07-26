@@ -54,12 +54,16 @@ async def _upsert(providers: list[dict]) -> int:
     return written
 
 
-async def run() -> None:
+async def run() -> int:
     log.info("np_poller: start")
     providers = await _fetch()
     log.info("np_poller: fetched %d providers", len(providers))
     count = await _upsert(providers)
     log.info("np_poller: upserted %d rows", count)
+    # Rueckgabe fuer poller_runs.rows_written (MM-10 Schicht A): ohne sie bleibt
+    # der Stempel NULL und die Deutung "lief, schrieb aber nichts" ist nicht
+    # automatisch erkennbar.
+    return count
 
 
 if __name__ == "__main__":
