@@ -2,6 +2,11 @@
 -- epz_scores: Extreme Pressure Zone Composite Score
 -- Läuft alle 15 Minuten nach liq_poller, liest aus liquidation_snapshots + ob_snapshots
 
+-- Wiederholbar gemacht 2026-07-26 (MM-10): CREATE TABLE/INDEX ohne
+-- IF NOT EXISTS liess diese Migration beim zweiten Lauf abbrechen bzw. legte
+-- still Duplikat-Indizes an. Indexnamen sind aus der Live-DB uebernommen, damit
+-- Repo und Live konvergieren. Belegt durch scripts/gate.sh (Doppellauf).
+
 CREATE TABLE IF NOT EXISTS epz_scores (
     id              BIGSERIAL PRIMARY KEY,
     ts              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -26,5 +31,5 @@ CREATE TABLE IF NOT EXISTS epz_scores (
     is_extreme      BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-CREATE INDEX ON epz_scores (ts DESC);
-CREATE INDEX ON epz_scores (is_extreme, ts DESC);
+CREATE INDEX IF NOT EXISTS epz_scores_ts_idx ON epz_scores (ts DESC);
+CREATE INDEX IF NOT EXISTS epz_scores_is_extreme_ts_idx ON epz_scores (is_extreme, ts DESC);
