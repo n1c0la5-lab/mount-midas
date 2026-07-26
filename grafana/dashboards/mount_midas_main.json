@@ -2239,7 +2239,7 @@
         "type": "grafana-postgresql-datasource",
         "uid": "mount_midas_pg"
       },
-      "description": "Anzahl der Datenquellen, deren neuester Datenpunkt älter ist als der für sie vereinbarte Takt. 0 heißt: alle 26 überwachten Tabellen sind frisch. Kein Wert ('No data') heißt: der Wächter hat in den letzten 30 Minuten nichts geschrieben — dann gilt die Kachel links.",
+      "description": "Anzahl der Datenquellen, deren neuester Datenpunkt älter ist als der für sie vereinbarte Takt. 0 heißt: alle 26 überwachten Tabellen sind frisch. Kein Wert ('No data') heißt: der Wächter hat in den letzten 30 Minuten nichts geschrieben — dann gilt die Kachel links.\n\nGewertet werden nur die Zeilen des LETZTEN Wächter-Durchlaufs, nicht alles aus den letzten 30 Minuten. Sonst hängt das Urteil über eine Quelle nach, die inzwischen ausgenommen wurde — die Kachel meldete so 3 stale, während der Wächter 2 sagte.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2294,7 +2294,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source NOT LIKE 'lauf:%' AND source NOT LIKE 'kanal:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source NOT LIKE 'lauf:%' AND source NOT LIKE 'kanal:%' AND ts >= (SELECT MAX(ts) FROM system_health) - INTERVAL '2 minutes' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
           "refId": "A"
         }
       ],
@@ -2414,7 +2414,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT CASE WHEN source LIKE 'lauf:%'  THEN 'Poller: ' || SUBSTRING(source FROM 6) WHEN source LIKE 'kanal:%' THEN 'ALARMKANAL STUMM (' || SUBSTRING(source FROM 7) || ')' ELSE source END AS \"Quelle\", last_data_ts AS \"Letzter Stempel\", ROUND(age_minutes / 60.0, 1) AS \"Alter (h)\", ROUND(threshold_min / 60.0, 1) AS \"Schwelle (h)\" FROM ( SELECT DISTINCT ON (source) * FROM system_health WHERE ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x WHERE is_stale ORDER BY age_minutes DESC NULLS FIRST",
+          "rawSql": "SELECT CASE WHEN source LIKE 'lauf:%'  THEN 'Poller: ' || SUBSTRING(source FROM 6) WHEN source LIKE 'kanal:%' THEN 'ALARMKANAL STUMM (' || SUBSTRING(source FROM 7) || ')' ELSE source END AS \"Quelle\", last_data_ts AS \"Letzter Stempel\", ROUND(age_minutes / 60.0, 1) AS \"Alter (h)\", ROUND(threshold_min / 60.0, 1) AS \"Schwelle (h)\" FROM ( SELECT DISTINCT ON (source) * FROM system_health WHERE ts >= (SELECT MAX(ts) FROM system_health) - INTERVAL '2 minutes' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x WHERE is_stale ORDER BY age_minutes DESC NULLS FIRST",
           "refId": "A"
         }
       ],
@@ -2481,7 +2481,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source LIKE 'lauf:%' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
+          "rawSql": "SELECT COUNT(*) FILTER (WHERE is_stale) AS value FROM ( SELECT DISTINCT ON (source) source, is_stale FROM system_health WHERE source LIKE 'lauf:%' AND ts >= (SELECT MAX(ts) FROM system_health) - INTERVAL '2 minutes' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY source, ts DESC ) x HAVING COUNT(*) > 0",
           "refId": "A"
         }
       ],
@@ -2565,7 +2565,7 @@
             "uid": "mount_midas_pg"
           },
           "format": "table",
-          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
+          "rawSql": "SELECT is_stale::int AS value FROM system_health WHERE source = 'kanal:telegram' AND ts >= (SELECT MAX(ts) FROM system_health) - INTERVAL '2 minutes' AND ts > NOW() - INTERVAL '30 minutes' ORDER BY ts DESC LIMIT 1",
           "refId": "A"
         }
       ],
