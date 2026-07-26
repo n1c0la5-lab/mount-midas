@@ -119,8 +119,17 @@ async def get_max_block(conn, from_id: str) -> Optional[int]:
 
 
 async def upsert_batch(conn, movements: list[dict]) -> int:
+    """
+    Schreibt Bewegungen und gibt die GEMESSENE Zahl neuer Zeilen zurück.
+
+    Vorher wurde len(movements) zurückgegeben — die Zahl der angebotenen, nicht
+    der geschriebenen Zeilen. ON CONFLICT DO NOTHING schluckt Duplikate still,
+    weshalb das Log stündlich bitgleich "hop2 done — 2444 new" meldete, während
+    wallet_movements 33 Stunden stillstand (MM-10 Defekt 3).
+    """
     if not movements:
         return 0
+    inserted = 0
     async with conn.cursor() as cur:
         for m in movements:
             await cur.execute(
@@ -133,8 +142,9 @@ async def upsert_batch(conn, movements: list[dict]) -> int:
                 (m["from"], m["to"], m["amount_icp"],
                  m["tx_hash"], m["block_height"], m["ts"], m["hop_depth"]),
             )
+            inserted += cur.rowcount
     await conn.commit()
-    return len(movements)
+    return inserted
 
 
 async def get_untracked_hop_destinations(conn, from_hop: int) -> list[str]:

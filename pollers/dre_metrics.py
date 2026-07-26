@@ -71,11 +71,39 @@ def _int_or_none(val: str) -> int | None:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+def _month_end(reward_period: str) -> datetime:
+    """Erster Moment NACH dem Monat (exklusive Obergrenze)."""
+    y, m = (int(p) for p in reward_period.split("-"))
+    y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return datetime(y, m, 1, tzinfo=timezone.utc)
+
+
 async def is_period_done(conn, reward_period: str) -> bool:
+    """
+    Ein Monat ist erst fertig, wenn er abgeschlossen IST und NACH seinem Ende
+    gelesen wurde.
+
+    Der laufende Monat wächst: Belohnungen akkumulieren, Tagesmetriken kommen
+    hinzu. Die alte Prüfung ("existiert irgendeine Zeile für den Monat?") hat
+    den ersten Zwischenstand als "fertig" abgestempelt und den Monat damit für
+    seine restliche Laufzeit gesperrt — np_performance stand 12 Tage still
+    (MM-10 Defekt 1).
+
+    Die Vollständigkeit hängt an fetched_at, nicht an der Existenz: ein Monat,
+    der nur mitten in seiner Laufzeit gelesen wurde, bleibt unvollständig und
+    wird nach Monatsende genau einmal nachgeholt.
+    """
+    if datetime.now(timezone.utc) < _month_end(reward_period):
+        return False
+
     async with conn.cursor() as cur:
         await cur.execute(
-            "SELECT 1 FROM np_reward_mints WHERE reward_period = %s LIMIT 1",
-            (reward_period,),
+            """
+            SELECT 1 FROM np_reward_mints
+            WHERE reward_period = %s AND fetched_at >= %s
+            LIMIT 1
+            """,
+            (reward_period, _month_end(reward_period)),
         )
         return await cur.fetchone() is not None
 
@@ -86,6 +114,7 @@ async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int
         log.warning("dre_metrics: node_providers_summary.csv not found in %s", period_dir)
         return 0
 
+    now = datetime.now(timezone.utc)
     rows: list[tuple] = []
     with summary.open() as f:
         for row in csv.DictReader(f):
@@ -93,24 +122,35 @@ async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int
             if rewards_icp is None:
                 continue
             rows.append((
-                datetime.now(timezone.utc),
+                now,
                 row["node_provider_id"],
                 rewards_icp,
                 reward_period,
+                now,
             ))
 
+    # DO UPDATE, nicht DO NOTHING: Monatsbelohnungen wachsen im Monatsverlauf.
+    # DO NOTHING hat den ersten Zwischenstand für den ganzen Monat
+    # festgeschrieben — threshold_calculator rechnete daraus 11 Tage lang
+    # dieselbe ICP-Menge (MM-10 Defekt 2 + 4).
+    # ts bleibt beim Erstkontakt stehen, fetched_at trägt den Lesezeitpunkt.
+    written = 0
     async with conn.cursor() as cur:
         for r in rows:
             await cur.execute(
                 """
-                INSERT INTO np_reward_mints (ts, provider_principal, amount_icp, reward_period)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (provider_principal, reward_period) DO NOTHING
+                INSERT INTO np_reward_mints
+                    (ts, provider_principal, amount_icp, reward_period, fetched_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (provider_principal, reward_period) DO UPDATE SET
+                    amount_icp = EXCLUDED.amount_icp,
+                    fetched_at = EXCLUDED.fetched_at
                 """,
                 r,
             )
+            written += cur.rowcount
     await conn.commit()
-    return len(rows)
+    return written
 
 
 async def insert_np_performance(conn, period_dir: Path) -> int:
@@ -145,6 +185,8 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                     perf_mult * 100 if perf_mult is not None else None,
                 ))
 
+        # DO UPDATE: DRE stellt Tageswerte nachträglich richtig. DO NOTHING hätte
+        # den ersten — womöglich vorläufigen — Messwert dauerhaft festgeschrieben.
         async with conn.cursor() as cur:
             for r in rows:
                 await cur.execute(
@@ -153,12 +195,17 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                         (ts, node_id, provider_principal, blocks_produced, blocks_failed,
                          failure_rate_pct, uptime_pct)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (ts, node_id) DO NOTHING
+                    ON CONFLICT (ts, node_id) DO UPDATE SET
+                        provider_principal = EXCLUDED.provider_principal,
+                        blocks_produced    = EXCLUDED.blocks_produced,
+                        blocks_failed      = EXCLUDED.blocks_failed,
+                        failure_rate_pct   = EXCLUDED.failure_rate_pct,
+                        uptime_pct         = EXCLUDED.uptime_pct
                     """,
                     r,
                 )
+                total += cur.rowcount
         await conn.commit()
-        total += len(rows)
 
     return total
 
