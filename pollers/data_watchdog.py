@@ -39,19 +39,11 @@ _DSN = (
     f"password={os.environ['DB_PASSWORD']}"
 )
 
-_CREATE = """
-CREATE TABLE IF NOT EXISTS system_health (
-    id            BIGSERIAL PRIMARY KEY,
-    ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    source        TEXT        NOT NULL,
-    last_data_ts  TIMESTAMPTZ,
-    age_minutes   NUMERIC,
-    is_stale      BOOLEAN     NOT NULL DEFAULT FALSE,
-    threshold_min INTEGER     NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_system_health_source_ts ON system_health (source, ts DESC);
-CREATE INDEX IF NOT EXISTS idx_system_health_ts        ON system_health (ts DESC);
-"""
+# Das system_health-Schema gehört Migration 010, nicht dieser Datei. Das frühere
+# CREATE TABLE/INDEX IF NOT EXISTS im Lauf-Pfad ist raus: seit der runner
+# nebenläufig ist, erzeugt DDL im heissen Pfad Deadlocks gegen die eigenen
+# INSERTs (ShareLock gegen RowExclusiveLock) — siehe run_stamp.py. Dass das
+# Schema da ist, sichern migrate.sh und die Schema-Drift-Prüfung in gate.sh.
 
 MIN  = 1
 HOUR = 60
@@ -493,8 +485,6 @@ async def run() -> None:
 
     try:
         async with await psycopg.AsyncConnection.connect(_DSN) as conn:
-            await conn.execute(_CREATE)
-
             stumm = await _check_alarm_channel(conn)
             problems = await _check_runs(conn, now)
             problems += await _check_freshness(conn, now)

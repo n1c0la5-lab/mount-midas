@@ -38,27 +38,16 @@ _DSN = (
     f"password={os.environ['DB_PASSWORD']}"
 )
 
-_CREATE = """
-CREATE TABLE IF NOT EXISTS epz_scores (
-    id              BIGSERIAL PRIMARY KEY,
-    ts              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    price           DOUBLE PRECISION,
-    sell_ratio      DOUBLE PRECISION,
-    sell_momentum   DOUBLE PRECISION,
-    price_drop_pct  DOUBLE PRECISION,
-    oi_change_pct   DOUBLE PRECISION,
-    ls_ratio        DOUBLE PRECISION,
-    s_taker         DOUBLE PRECISION,
-    s_momentum      DOUBLE PRECISION,
-    s_delta         DOUBLE PRECISION,
-    s_oi            DOUBLE PRECISION,
-    s_ls            DOUBLE PRECISION,
-    extreme_score   DOUBLE PRECISION NOT NULL,
-    is_extreme      BOOLEAN NOT NULL DEFAULT FALSE
-);
-CREATE INDEX IF NOT EXISTS epz_scores_ts_idx       ON epz_scores (ts DESC);
-CREATE INDEX IF NOT EXISTS epz_scores_extreme_idx  ON epz_scores (is_extreme, ts DESC);
-"""
+# Das epz_scores-Schema gehört Migration 004, nicht dieser Datei. Das frühere
+# CREATE TABLE/INDEX IF NOT EXISTS im Lauf-Pfad ist raus — zwei Gründe:
+#
+# 1. Seit der runner nebenläufig ist (PR #18), erzeugt DDL im heissen Pfad
+#    Deadlocks gegen die eigenen INSERTs (ShareLock gegen RowExclusiveLock,
+#    siehe run_stamp.py).
+# 2. Es legte epz_scores_extreme_idx an — den exakten Doppelgänger von
+#    epz_scores_is_extreme_ts_idx aus 004. Migration 019 hat ihn am 2026-07-27
+#    gedroppt, und dieser Poller hatte ihn binnen 15 Minuten wieder da. Eine
+#    Migration, die ein Poller stillschweigend zurückdreht, ist keine Migration.
 
 # Holt alle Signal-Rohdaten in einer Abfrage.
 # liq: letzte 6h aus liquidation_snapshots, mit ROW_NUMBER (1 = neuster Wert).
@@ -183,8 +172,6 @@ def _score(row: tuple) -> dict:
 async def run() -> None:
     try:
         async with await psycopg.AsyncConnection.connect(_DSN) as conn:
-            await conn.execute(_CREATE)
-
             row = await (await conn.execute(_FETCH)).fetchone()
             if row is None or row[0] is None:
                 log.warning("epz_calculator: keine Daten in liquidation_snapshots — überspringe")
