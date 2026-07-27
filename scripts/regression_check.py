@@ -543,6 +543,67 @@ def check_runner_concurrency(r: Result) -> None:
          f"Schleifentakt {m.group(1)}s)")
 
 
+def check_kein_ddl_in_pollern(r: Result) -> None:
+    """
+    Kein Poller darf Schema-DDL ausführen. Das Schema gehört den Migrationen.
+
+    Zwei Gründe, beide am 2026-07-27 eingetreten:
+
+    1. Deadlocks. Seit der runner nebenläufig ist (PR #18), verklemmen sich
+       zwei gleichzeitige Läufe an einem CREATE INDEX IF NOT EXISTS:
+       es nimmt einen ShareLock, das folgende INSERT einen RowExclusiveLock,
+       und die beiden vertragen sich nicht. In den ersten zwei Stunden nach dem
+       Deploy gingen fünf Lauf-Stempel verloren — ausgerechnet in der Schicht,
+       die "läuft der Poller?" beantworten soll.
+
+    2. Stille Rückabwicklung von Migrationen. epz_calculator legte
+       epz_scores_extreme_idx an, den exakten Doppelgänger eines Index aus
+       Migration 004. Migration 019 hat ihn gedroppt — der Poller hatte ihn
+       binnen 15 Minuten wieder da. Eine Migration, die ein Poller
+       stillschweigend zurückdreht, ist keine Migration.
+
+    Geprüft wird per AST über die ausführbaren String-Literale, nicht über den
+    Dateitext: sonst würde schon dieser Docstring die Prüfung auslösen, und ein
+    Kommentar wäre ein Testfehler. Docstrings werden übersprungen, alles andere
+    ist potenzieller SQL-Text.
+    """
+    name = "Poller führen kein Schema-DDL aus (Schema gehört den Migrationen)"
+    import ast
+
+    ddl = re.compile(r"\b(CREATE|ALTER|DROP)\s+(TABLE|INDEX|VIEW)\b", re.I)
+    treffer: list[str] = []
+
+    for pfad in sorted(POLLERS.glob("*.py")):
+        try:
+            baum = ast.parse(pfad.read_text())
+        except SyntaxError as e:
+            r.fail(name, f"{pfad.name} nicht parsebar: {e}")
+            return
+
+        # Docstrings einsammeln, damit sie nicht als SQL zählen.
+        docstrings = set()
+        for knoten in ast.walk(baum):
+            if isinstance(knoten, (ast.Module, ast.FunctionDef,
+                                   ast.AsyncFunctionDef, ast.ClassDef)):
+                d = ast.get_docstring(knoten, clean=False)
+                if d is not None:
+                    docstrings.add(d)
+
+        for knoten in ast.walk(baum):
+            if (isinstance(knoten, ast.Constant) and isinstance(knoten.value, str)
+                    and knoten.value not in docstrings and ddl.search(knoten.value)):
+                schnipsel = ddl.search(knoten.value).group(0)
+                treffer.append(f"{pfad.name}:{knoten.lineno} — {schnipsel}")
+
+    if treffer:
+        r.fail(name, "DDL im Poller-Code:\n     " + "\n     ".join(treffer) +
+                     "\n     Das Schema gehört in eine Migration; angewendet "
+                     "wird es mit scripts/migrate.sh.")
+        return
+
+    r.ok(f"{name} ({len(list(POLLERS.glob('*.py')))} Module)")
+
+
 def check_schwellen_enthaltung(r: Result) -> None:
     """
     Der Schwellen-Messer muss sich enthalten, wenn die Datenlage es verlangt —
@@ -855,6 +916,7 @@ def main() -> int:
     check_period_completeness_logic(r)
     check_alert_cooldown_logic(r)
     check_runner_concurrency(r)
+    check_kein_ddl_in_pollern(r)
     check_schwellen_enthaltung(r)
     check_panels_no_invented_values(r)
 

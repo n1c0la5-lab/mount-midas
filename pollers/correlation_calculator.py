@@ -19,15 +19,9 @@ _DSN = (
     f"password={os.environ['DB_PASSWORD']}"
 )
 
-_CREATE = """
-CREATE TABLE IF NOT EXISTS summary_stats (
-    id              SERIAL PRIMARY KEY,
-    sell_price_corr DOUBLE PRECISION,
-    oi_price_corr   DOUBLE PRECISION,
-    best_lag_hours  INT,
-    calculated_at   TIMESTAMPTZ DEFAULT NOW()
-);
-"""
+# Das summary_stats-Schema gehört Migration 017, nicht dieser Datei. DDL im
+# Lauf-Pfad erzeugt seit dem nebenläufigen runner (PR #18) Deadlocks gegen die
+# eigenen INSERTs — siehe run_stamp.py.
 
 _FETCH = """
 SELECT
@@ -61,8 +55,6 @@ def _pearson(xs: list, ys: list) -> float | None:
 async def run() -> None:
     try:
         async with await psycopg.AsyncConnection.connect(_DSN) as conn:
-            await conn.execute(_CREATE)
-
             rows = await (await conn.execute(_FETCH)).fetchall()
             n = len(rows)
 

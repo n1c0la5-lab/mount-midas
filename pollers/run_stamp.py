@@ -29,22 +29,23 @@ _DSN = (
     f"password={os.environ['DB_PASSWORD']}"
 )
 
-_CREATE = """
-CREATE TABLE IF NOT EXISTS poller_runs (
-    id            BIGSERIAL PRIMARY KEY,
-    poller        TEXT        NOT NULL,
-    started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    finished_at   TIMESTAMPTZ,
-    duration_ms   INTEGER,
-    rows_written  INTEGER,
-    ok            BOOLEAN     NOT NULL DEFAULT FALSE,
-    error         TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_poller_runs_poller_started
-    ON poller_runs (poller, started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_poller_runs_started
-    ON poller_runs (started_at DESC);
-"""
+# Das Schema gehört Migration 018, NICHT dieser Datei.
+#
+# Hier stand bis 2026-07-27 ein CREATE TABLE/INDEX IF NOT EXISTS, das bei JEDEM
+# Stempel mitlief. Seriell war das bloss überflüssig. Seit der runner nebenläufig
+# ist (PR #18), verklemmen sich zwei gleichzeitige Stempel daran:
+# CREATE INDEX IF NOT EXISTS nimmt einen ShareLock, das folgende INSERT einen
+# RowExclusiveLock — die beiden vertragen sich nicht, und zwei Poller, die sich
+# überkreuzen, laufen in einen Deadlock. In den ersten zwei Stunden nach dem
+# Deploy gingen so fünf Stempel verloren.
+#
+# Ein verlorener Stempel ist teurer, als er aussieht: der Poller lief, aber
+# Schicht A sieht ihn nicht — also ausgerechnet die Wache, die "läuft der
+# Poller?" beantworten soll. Der Schreibpfad einer Wache darf nicht selbst die
+# Lücken erzeugen, die sie melden soll.
+#
+# Dass das Schema wirklich da ist, sichern migrate.sh und die Schema-Drift-
+# Prüfung in gate.sh — nicht ein DDL im heissen Pfad.
 
 _MAX_ERROR_LEN = 2000
 
@@ -64,7 +65,6 @@ async def record_run(
     duration_ms = int((finished_at - started_at).total_seconds() * 1000)
     try:
         async with await psycopg.AsyncConnection.connect(_DSN) as conn:
-            await conn.execute(_CREATE)
             await conn.execute(
                 """
                 INSERT INTO poller_runs
