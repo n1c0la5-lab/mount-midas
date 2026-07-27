@@ -171,6 +171,12 @@ async def insert_reward_mints(conn, period_dir: Path, reward_period: str) -> int
 
 
 async def insert_np_performance(conn, period_dir: Path) -> int:
+    # fetched_at ist der Lesezeitpunkt, ts der Metrik-TAG. Die beiden auseinander
+    # zu halten ist hier kein Detail: DRE-Perioden laufen vom 14. zum 14., also
+    # bleibt der neueste ts bis zu einem Monat stehen, obwohl der Poller taeglich
+    # sauber schreibt. Ohne eigenen Schreibstempel kann der Waechter "Poller
+    # schreibt nicht" nicht von "Periode laeuft noch" unterscheiden.
+    now = datetime.now(timezone.utc)
     total = 0
     for provider_dir in sorted(period_dir.iterdir()):
         if not provider_dir.is_dir():
@@ -200,6 +206,7 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                     _int_or_none(row.get("num_blocks_failed", "")),
                     failure_rate * 100 if failure_rate is not None else None,
                     perf_mult * 100 if perf_mult is not None else None,
+                    now,
                 ))
 
         # DO UPDATE: DRE stellt Tageswerte nachträglich richtig. DO NOTHING hätte
@@ -210,14 +217,15 @@ async def insert_np_performance(conn, period_dir: Path) -> int:
                     """
                     INSERT INTO np_performance
                         (ts, node_id, provider_principal, blocks_produced, blocks_failed,
-                         failure_rate_pct, uptime_pct)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                         failure_rate_pct, uptime_pct, fetched_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (ts, node_id) DO UPDATE SET
                         provider_principal = EXCLUDED.provider_principal,
                         blocks_produced    = EXCLUDED.blocks_produced,
                         blocks_failed      = EXCLUDED.blocks_failed,
                         failure_rate_pct   = EXCLUDED.failure_rate_pct,
-                        uptime_pct         = EXCLUDED.uptime_pct
+                        uptime_pct         = EXCLUDED.uptime_pct,
+                        fetched_at         = EXCLUDED.fetched_at
                     """,
                     r,
                 )

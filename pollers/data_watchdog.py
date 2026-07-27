@@ -12,8 +12,10 @@ wallet_movements einen Tag. Umgekehrt lief dre_metrics zwölf Tage lang brav und
 schrieb stillschweigend nichts — kein Frische-Check der Welt hätte das gefunden,
 weil der Poller ja lief. Erst beide Schichten zusammen ergeben eine Aussage.
 
-Ergebnisse landen in system_health, Alarme gehen gebündelt per Telegram raus
-(max. 1x/Stunde pro Quelle).
+Ergebnisse landen in system_health, Alarme gehen gebündelt per Telegram raus:
+EIN Alarm für alle aktuellen Befunde, höchstens 1x/Stunde — der Cooldown hängt am
+Befund-Set und liegt in der DB, überlebt also Deploys. Neu auftretende Befunde
+durchbrechen den Cooldown sofort.
 """
 import asyncio
 import logging
@@ -151,10 +153,20 @@ SOURCES: dict[str, Source] = {
     "threshold_aggregate_daily": Source(
         "SELECT MAX(ts) FROM threshold_aggregate_daily",                         30 * HOUR, "takt"),
     "xdr_rates":          Source("SELECT MAX(ts) FROM xdr_rates",                30 * HOUR, "takt"),
-    # np_performance: ts ist der Metrik-TAG, nicht der Schreibzeitpunkt, und DRE
-    # hat einen Nachlauf. 72h ist eine begründete Obergrenze (zwei verpasste
-    # Läufe plus Puffer), KEIN gemessener Wert — siehe MM-10 "Offene Punkte".
-    "np_performance":     Source("SELECT MAX(ts) FROM np_performance",           72 * HOUR, "takt"),
+    # np_performance: fetched_at, NICHT ts. ts ist der Metrik-TAG, und DRE-
+    # Belohnungsperioden laufen vom 14. zum 14., nicht über Kalendermonate — der
+    # Ausgabeordner heisst "rewards_2026-06-14_to_2026-07-14". Der neueste
+    # verfügbare Tag bleibt deshalb strukturell bis zu einem Monat stehen, bis
+    # die nächste Periode schliesst, ohne dass irgendetwas fehlt.
+    # Die alte Schwelle von 72h auf MAX(ts) war ausdrücklich als "begründete
+    # Obergrenze, KEIN gemessener Wert" markiert. Sie lag um Faktor 10 daneben
+    # und meldete am 27.07. eine kerngesunde Tabelle 13 Tage lang rund um die
+    # Uhr als stale — 24 Fehlalarme am Tag. Genau das Muster, das den Kanal
+    # schon einmal gekostet hat.
+    # Auf fetched_at ist die Frage wieder täglich beantwortbar (30h wie die
+    # anderen Tages-Poller), weil dre_metrics jede Nacht die laufende Periode neu
+    # stempelt — auch wenn kein neuer Metrik-Tag dazukommt.
+    "np_performance":     Source("SELECT MAX(fetched_at) FROM np_performance",   30 * HOUR, "takt"),
 
     # Event-getrieben — Alter allein ist hier kein Defekt.
     #
@@ -163,7 +175,16 @@ SOURCES: dict[str, Source] = {
     # (31.5h). ICP hat einfach über lange Strecken keine Liquidationen — das ist
     # Marktinformation, kein Defekt. Ob okx_liq_poller läuft, klärt Schicht A.
     "liquidation_events": Source("SELECT MAX(ts) FROM liquidation_events",       48 * HOUR, "event"),
-    "wallet_movements":   Source("SELECT MAX(ts) FROM wallet_movements",         48 * HOUR, "event"),
+    # wallet_movements: 48h war ebenfalls zu eng — 31.16% Alarmquote über 199
+    # Messungen, praktisch dieselbe Größenordnung wie die 34% von
+    # liquidation_events. Gemessen am 27.07. aus zwei Richtungen:
+    #   system_health-Historie:            max 54.2h, Schnitt 44.2h
+    #   echte Lücken zwischen Bewegungen:  max 69.0h, Schnitt 1.2h (60 Tage)
+    # Maßgeblich ist die Lücken-Messung: bei einer Event-Tabelle ist der Abstand
+    # zwischen zwei Bewegungen genau die Größe, die hier gefragt ist. 120h = die
+    # gemessenen 69h plus reichlich Puffer. Ob wallet_tracker läuft, klärt
+    # Schicht A — dafür braucht es keine enge Frische-Schwelle.
+    "wallet_movements":   Source("SELECT MAX(ts) FROM wallet_movements",        120 * HOUR, "event"),
     "destination_clusters": Source(
         "SELECT MAX(first_seen_at) FROM destination_clusters",                   14 * DAY,  "event"),
     # np_wallet_labels bewusst NICHT hier: siehe FRISCHE_AUSGENOMMEN.
@@ -178,6 +199,12 @@ FRISCHE_AUSGENOMMEN: dict[str, str] = {
         "Labels an, added_at bleibt sonst stehen — 63 Tage ohne neues Label sind "
         "der Normalfall, kein Defekt. Beim ersten scharfen Lauf schlug eine "
         "30-Tage-Schwelle hier sofort falsch an.",
+    "watchdog_alert_state":
+        "Cooldown-Zustand des Wächters, geschrieben NUR wenn ein Alarm rausgeht. "
+        "Der Normalfall ist, dass nichts kaputt ist — die Zeile bleibt dann "
+        "beliebig lange stehen. Eine Frische-Schwelle darauf würde Schweigen als "
+        "Defekt lesen und hätte genau die Verhaltensweise, die MM-10 abstellt: "
+        "sie meldete umso lauter, je gesünder das System ist.",
 }
 
 # ── Schicht A: Lauf-Stempel ───────────────────────────────────────────────────
@@ -212,8 +239,6 @@ POLLER_CADENCE: dict[str, int] = {
 _LAUF_PREFIX  = "lauf:"
 _KANAL_SOURCE = "kanal:telegram"
 
-# Throttle: letzter Alert-Zeitpunkt pro Quelle (in-memory, resets bei Container-Neustart)
-_last_alert: dict[str, datetime] = {}
 _ALERT_COOLDOWN_MIN = 60
 
 
@@ -236,11 +261,75 @@ async def _send_telegram(session: aiohttp.ClientSession, text: str) -> None:
         log.warning("data_watchdog: Telegram send failed: %s", e)
 
 
-def _should_alert(source: str, now: datetime) -> bool:
-    last = _last_alert.get(source)
-    if last is None:
+def _signature(namen: list[str]) -> str:
+    """Kanonische Kennung eines Befund-Sets — Reihenfolge darf nichts ändern."""
+    return ",".join(sorted(set(namen)))
+
+
+def should_send(
+    befunde: set[str],
+    letzte_signatur: str | None,
+    zuletzt_gesendet: datetime | None,
+    now: datetime,
+    cooldown_min: int = _ALERT_COOLDOWN_MIN,
+) -> bool:
+    """
+    Reine Entscheidung: geht jetzt ein Alarm raus?
+
+    Bewusst ohne DB-Zugriff, damit das Gate echtes Verhalten prüfen kann und
+    nicht nur, ob die richtigen Wörter im Quelltext stehen.
+
+    Der Cooldown hängt am BEFUND-SET, nicht an der einzelnen Quelle. Vorher hing
+    er pro Quelle — und das hat die Bündelung ausgehebelt, sobald zwei Quellen zu
+    verschiedenen Zeiten stale wurden: jede lief in ihrem eigenen Stundenrhythmus
+    weiter. Am 27.07. kamen so 26 Nachrichten in 20 Stunden, ab 01:23 durchgehend
+    paarweise im Abstand von 5,5 Minuten. Bei N stale Quellen wären es N
+    Nachrichten pro Stunde gewesen statt der einen, die gemeint war.
+
+    Drei Regeln:
+
+    1. Keine Befunde → nichts senden. Schweigen ist die Normallage.
+    2. Etwas NEUES ist kaputt → sofort senden, egal wie frisch der letzte Alarm
+       ist. Ein echter neuer Ausfall darf nicht bis zu 60 Minuten warten, nur
+       weil eine andere Quelle gerade gemeldet hat.
+    3. Sonst → erst nach Ablauf des Cooldowns, als Erinnerung an eine bereits
+       gemeldete Lage.
+
+    Ein SCHRUMPFENDES Set löst absichtlich nichts aus: eine Quelle, die sich
+    erholt, ist keine Nachricht wert, und eine flatternde Quelle würde sonst bei
+    jedem Wechsel senden. Der gespeicherte Zustand wird nur beim tatsächlichen
+    Senden fortgeschrieben (siehe run()) — dadurch gilt eine Quelle, die still
+    verschwindet und wiederkommt, erst nach dem nächsten regulären Alarm wieder
+    als neu.
+    """
+    if not befunde:
+        return False
+    if zuletzt_gesendet is None or letzte_signatur is None:
         return True
-    return (now - last).total_seconds() / 60 >= _ALERT_COOLDOWN_MIN
+    bekannt = set(letzte_signatur.split(",")) if letzte_signatur else set()
+    if befunde - bekannt:
+        return True
+    return (now - zuletzt_gesendet).total_seconds() / 60 >= cooldown_min
+
+
+async def _load_alert_state(conn) -> tuple[str | None, datetime | None]:
+    row = await (await conn.execute(
+        "SELECT signature, last_sent_at FROM watchdog_alert_state WHERE id = 1"
+    )).fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+async def _store_alert_state(conn, signatur: str, now: datetime) -> None:
+    await conn.execute(
+        """
+        INSERT INTO watchdog_alert_state (id, signature, last_sent_at)
+        VALUES (1, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            signature    = EXCLUDED.signature,
+            last_sent_at = EXCLUDED.last_sent_at
+        """,
+        (signatur, now),
+    )
 
 
 def _fmt_age(age_min: float | None) -> str:
@@ -410,25 +499,29 @@ async def run() -> None:
             problems = await _check_runs(conn, now)
             problems += await _check_freshness(conn, now)
 
+            # Befunde zuerst festschreiben, dann erst senden. Das Dashboard darf
+            # nicht davon abhängen, ob Telegram erreichbar ist.
             await conn.commit()
 
-        if stumm:
-            # Bei stummem Kanal NICHT senden und den Cooldown NICHT setzen:
-            # sonst verbrauchen die Alarme still ihre Sperrfrist und es bliebe
-            # nach dem Entstummen eine weitere Stunde ruhig.
-            if problems:
-                log.warning("data_watchdog: %d Befunde, aber Kanal stumm — "
-                            "nur im Dashboard sichtbar", len(problems))
-        else:
-            # Gebündelt: ein Alarm für alles, was gerade nicht auf Cooldown steht.
-            # Vorher ging eine Nachricht PRO Quelle raus — bei einem breiten
-            # Ausfall wären das mit 44 Prüfungen entsprechend viele geworden.
-            due = [p for p in problems if _should_alert(p[0], now)]
-            if due:
-                async with aiohttp.ClientSession() as session:
-                    await _send_telegram(session, _build_alert(due))
-                for name, _, _ in due:
-                    _last_alert[name] = now
+            if stumm:
+                # Bei stummem Kanal NICHT senden und den Cooldown NICHT setzen:
+                # sonst verbrauchen die Alarme still ihre Sperrfrist und es
+                # bliebe nach dem Entstummen eine weitere Stunde ruhig.
+                if problems:
+                    log.warning("data_watchdog: %d Befunde, aber Kanal stumm — "
+                                "nur im Dashboard sichtbar", len(problems))
+            else:
+                # Gebündelt: EIN Alarm für alle aktuellen Befunde. Der Cooldown
+                # hängt am ganzen Set, nicht an der einzelnen Quelle — sonst
+                # zerfällt das Bündel wieder in einzelne Stundenrhythmen.
+                signatur = _signature([p[0] for p in problems])
+                letzte_signatur, zuletzt = await _load_alert_state(conn)
+                if should_send({p[0] for p in problems}, letzte_signatur, zuletzt, now):
+                    async with aiohttp.ClientSession() as session:
+                        await _send_telegram(session, _build_alert(problems))
+                    await _store_alert_state(conn, signatur, now)
+
+            await conn.commit()
 
         log.info("data_watchdog: fertig — %d Quellen, %d Poller, %d Befunde, Kanal %s",
                  len(SOURCES), len(POLLER_CADENCE), len(problems),

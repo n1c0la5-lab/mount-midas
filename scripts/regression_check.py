@@ -349,6 +349,77 @@ def check_period_completeness_logic(r: Result) -> None:
     r.ok(f"{name} ({len(cases)} Fälle)")
 
 
+def check_alert_cooldown_logic(r: Result) -> None:
+    """
+    Der Alarm-Cooldown muss am BEFUND-SET hängen, nicht an der einzelnen Quelle,
+    und ein neuer Befund muss ihn sofort durchbrechen.
+
+    Warum als Verhaltens-Test und nicht als Grep: die kaputte Fassung hatte
+    ebenfalls einen Cooldown, ebenfalls 60 Minuten, und das Wort "gebündelt"
+    stand sogar im Kommentar. Falsch war allein, WORAN er hing — pro Quelle
+    statt am Set. Kein Schlüsselwort der Welt hätte das gefunden; sichtbar wird
+    es erst, wenn zwei Quellen zu verschiedenen Zeiten stale werden.
+    """
+    name = "data_watchdog: Alarm-Cooldown (Verhalten, nicht Wortwahl)"
+    text = (POLLERS / "data_watchdog.py").read_text()
+
+    from datetime import datetime, timedelta, timezone
+    ns: dict = {"datetime": datetime, "timezone": timezone,
+                "_ALERT_COOLDOWN_MIN": 60}
+    m = re.search(r"^def should_send\(.*?(?=\n\n\n|\n\nasync def |\n\ndef )",
+                  text, re.S | re.M)
+    if not m:
+        r.fail(name, "should_send() nicht gefunden — muss eine reine, "
+                     "testbare Funktion auf Modulebene sein")
+        return
+    try:
+        exec(m.group(0), ns)
+    except Exception as e:
+        r.fail(name, f"should_send() nicht ausführbar: {e}")
+        return
+    send = ns["should_send"]
+
+    U = timezone.utc
+    T = datetime(2026, 7, 27, 12, 0, tzinfo=U)
+    # (Befunde, letzte Signatur, zuletzt gesendet, erwartet, warum)
+    cases = [
+        (set(), None, None, False, "keine Befunde, nie gesendet"),
+        (set(), "a", T - timedelta(minutes=1), False, "Befunde erholt — kein Entwarnungs-Spam"),
+        ({"a"}, None, None, True, "erster Befund überhaupt"),
+        ({"a"}, "a", T - timedelta(minutes=5), False, "gleiche Lage, Cooldown läuft"),
+        ({"a"}, "a", T - timedelta(minutes=59), False, "gleiche Lage, kurz vor Ablauf"),
+        ({"a"}, "a", T - timedelta(minutes=60), True, "gleiche Lage, Cooldown abgelaufen"),
+        ({"a", "b"}, "a", T - timedelta(minutes=5), True,
+         "b ist NEU kaputt — muss den Cooldown durchbrechen"),
+        # Der eigentliche Defekt vom 27.07.: b wird stale, während a auf
+        # Sperrfrist steht. Mit Cooldown pro Quelle kam b sofort als eigene
+        # Nachricht und lief danach in seinem eigenen Stundenrhythmus weiter —
+        # ab da dauerhaft Paare im Abstand von wenigen Minuten.
+        ({"a", "b"}, "a,b", T - timedelta(minutes=5), False,
+         "beide bereits gemeldet — genau EINE Nachricht pro Stunde, kein Paar"),
+        ({"a"}, "a,b", T - timedelta(minutes=5), False,
+         "Set geschrumpft, nichts Neues — schweigen"),
+        ({"b", "a"}, "a,b", T - timedelta(minutes=5), False,
+         "Reihenfolge darf nichts ändern"),
+        ({"a"}, "a", None, True, "Signatur ohne Sendezeitpunkt — im Zweifel senden"),
+    ]
+    for befunde, sig, zuletzt, expected, why in cases:
+        got = send(set(befunde), sig, zuletzt, T)
+        if got != expected:
+            r.fail(name, f"should_send({sorted(befunde)}, {sig!r}, {zuletzt}) = "
+                         f"{got}, erwartet {expected}\nFall: {why}")
+            return
+
+    # Sabotage: hinge der Cooldown wieder an der einzelnen Quelle, müsste der
+    # Paar-Fall oben senden. Er tut es nicht — sonst wäre dieser Test grün
+    # geblieben, während das Verhalten kaputt ist.
+    if send({"a", "b"}, "a,b", T - timedelta(minutes=5), T):
+        r.fail(name, "Cooldown hängt nicht am Set")
+        return
+
+    r.ok(f"{name} ({len(cases)} Fälle)")
+
+
 def check_panels_no_invented_values(r: Result) -> None:
     """
     Kein Panel darf einen Wert erfinden, wenn die Daten fehlen.
@@ -536,6 +607,7 @@ def main() -> int:
     check_no_unnamed_index_with_if_not_exists(r)
     check_rowcount_not_guessed(r)
     check_period_completeness_logic(r)
+    check_alert_cooldown_logic(r)
     check_panels_no_invented_values(r)
 
     print("\n--- Mit Datenbank ---")
