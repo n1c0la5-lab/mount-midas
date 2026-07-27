@@ -420,6 +420,128 @@ def check_alert_cooldown_logic(r: Result) -> None:
     r.ok(f"{name} ({len(cases)} Fälle)")
 
 
+def check_runner_concurrency(r: Result) -> None:
+    """
+    Ein langsamer Poller darf die Schedule-Schleife nicht mehr aufhalten, und
+    derselbe Poller darf nicht doppelt gleichzeitig laufen.
+
+    Warum als Verhaltens-Test: die Wortwahl beweist hier gar nichts. `sleep(1)`
+    im Quelltext zu finden sagt nichts darüber, ob der Job nebenläufig startet,
+    und ein `threading.Thread(...)` im Text sagt nichts darüber, ob es auch
+    gestartet wird. Geprüft wird deshalb die Zeit: der Wrapper muss sofort
+    zurückkehren, obwohl der Poller lange läuft.
+
+    Der Defekt, der hier eingefangen wird (gemessen am 27.07.): wallet_tracker
+    lief im Schnitt 437s und blockierte dabei alles andere — zwischen zwei
+    Läufen der 60s-Poller lagen bis zu 9.5 Minuten.
+    """
+    name = "runner: Poller blockieren einander nicht (Verhalten, nicht Wortwahl)"
+    text = (POLLERS / "runner.py").read_text()
+
+    import asyncio as _asyncio
+    import threading as _threading
+    import time as _time
+
+    class _StummerLog:
+        def __init__(self):
+            self.warnungen = []
+
+        def warning(self, msg, *args):
+            self.warnungen.append(msg % args if args else msg)
+
+        def error(self, msg, *args):
+            pass
+
+    gelaufen: list[str] = []
+
+    async def _run_and_stamp(coro_fn, poller):
+        gelaufen.append(poller)
+        await coro_fn()
+
+    stumm = _StummerLog()
+    ns: dict = {
+        "threading": _threading, "asyncio": _asyncio, "log": stumm,
+        "_locks": {}, "_locks_guard": _threading.Lock(),
+        "_run_and_stamp": _run_and_stamp,
+    }
+    for fname in ("_poller_name", "_lock_for", "is_overlapping", "execute", "run_async"):
+        m = re.search(rf"^def {fname}\(.*?(?=\n\n\n|\n\nasync def |\n\ndef )",
+                      text, re.S | re.M)
+        if not m:
+            r.fail(name, f"{fname}() nicht gefunden — muss eine Funktion auf "
+                         f"Modulebene sein, damit dieser Test greifen kann")
+            return
+        try:
+            exec(m.group(0), ns)
+        except Exception as e:
+            r.fail(name, f"{fname}() nicht ausführbar: {e}")
+            return
+
+    execute, run_async = ns["execute"], ns["run_async"]
+
+    # 1. Der Wrapper muss sofort zurückkehren, obwohl der Poller 1.5s braucht.
+    #    Mit dem alten seriellen Code hätte das hier 1.5s gedauert.
+    langsam_laeuft = _threading.Event()
+
+    async def _langsam():
+        langsam_laeuft.set()
+        await _asyncio.sleep(1.5)
+
+    _langsam.__module__, _langsam.__qualname__ = "test", "langsam"
+    t0 = _time.monotonic()
+    run_async(_langsam)()
+    dauer = _time.monotonic() - t0
+    if dauer > 0.5:
+        r.fail(name, f"run_async() blockierte {dauer:.2f}s — der geplante Lauf "
+                     f"muss nebenläufig starten, sonst hält ein langsamer "
+                     f"Poller die ganze Schleife auf")
+        return
+
+    # 2. Während der langsame Poller läuft, muss ein zweiter Takt desselben
+    #    Pollers übersprungen werden — sonst stapelt er sich selbst auf.
+    if not langsam_laeuft.wait(timeout=3):
+        r.fail(name, "der nebenläufige Poller ist gar nicht angelaufen")
+        return
+    execute(_langsam, "test.langsam")
+    if not any("übersprungen" in w for w in stumm.warnungen):
+        r.fail(name, "ein bereits laufender Poller wurde NICHT übersprungen — "
+                     "Überlappungssperre greift nicht")
+        return
+    if gelaufen.count("test.langsam") != 1:
+        r.fail(name, f"test.langsam lief {gelaufen.count('test.langsam')}x "
+                     f"gleichzeitig, erwartet genau 1x")
+        return
+
+    # 3. Ein ANDERER Poller darf davon nicht ausgesperrt werden — die Sperre
+    #    gilt pro Poller, nicht global. Waere sie global, haetten wir den alten
+    #    Defekt in neuer Form.
+    async def _schnell():
+        pass
+
+    execute(_schnell, "test.schnell")
+    if "test.schnell" not in gelaufen:
+        r.fail(name, "ein anderer Poller wurde ausgesperrt — die Sperre muss "
+                     "pro Poller gelten, nicht global")
+        return
+
+    # 4. Die Schleife darf nicht hinter der Arbeit eine volle Minute schlafen.
+    #    Das ist der zweite Defekt: Periode = 60s PLUS Arbeitszeit, gemessen
+    #    74s statt 60s bei den 60s-Pollern.
+    m = re.search(r"while True:\s*\n\s*schedule\.run_pending\(\)\s*\n\s*time\.sleep\((\d+)\)",
+                  text)
+    if not m:
+        r.fail(name, "Schedule-Schleife nicht in der erwarteten Form gefunden")
+        return
+    if int(m.group(1)) > 5:
+        r.fail(name, f"Schedule-Schleife schläft {m.group(1)}s pro Runde — "
+                     f"damit ist die Periode jedes Jobs 'Intervall PLUS "
+                     f"Arbeitszeit'. Höchstens 5s.")
+        return
+
+    r.ok(f"{name} (nebenläufig in {dauer:.3f}s, Sperre pro Poller, "
+         f"Schleifentakt {m.group(1)}s)")
+
+
 def check_panels_no_invented_values(r: Result) -> None:
     """
     Kein Panel darf einen Wert erfinden, wenn die Daten fehlen.
@@ -608,6 +730,7 @@ def main() -> int:
     check_rowcount_not_guessed(r)
     check_period_completeness_logic(r)
     check_alert_cooldown_logic(r)
+    check_runner_concurrency(r)
     check_panels_no_invented_values(r)
 
     print("\n--- Mit Datenbank ---")
