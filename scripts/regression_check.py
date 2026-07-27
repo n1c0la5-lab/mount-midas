@@ -30,6 +30,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 POLLERS = REPO / "pollers"
 MIGRATIONS = REPO / "migrations"
+SCRIPTS = REPO / "scripts"
 
 def _frische_ausgenommen() -> set[str]:
     """
@@ -542,6 +543,129 @@ def check_runner_concurrency(r: Result) -> None:
          f"Schleifentakt {m.group(1)}s)")
 
 
+def check_schwellen_enthaltung(r: Result) -> None:
+    """
+    Der Schwellen-Messer muss sich enthalten, wenn die Datenlage es verlangt —
+    und er darf eine Schwelle NIE lockern.
+
+    Warum das ins Gate gehört: die Enthaltungs-Regeln sind der ganze Wert des
+    Skripts. Ein Werkzeug, das aus 10 Messungen eine Schwelle vorschlägt, ist
+    schlimmer als keins, weil seine Ausgabe nach Messung aussieht. Und eine zu
+    enge Schwelle ist kein sicherer Fehler: 34% Fehlalarmquote haben am
+    2026-07-04 den Alarmkanal gekostet, danach blieb ein 31-Stunden-Ausfall
+    unsichtbar.
+    """
+    name = "schwellen_messen: enthält sich statt zu raten (Verhalten)"
+    pfad = SCRIPTS / "schwellen_messen.py"
+    if not pfad.exists():
+        r.fail(name, "scripts/schwellen_messen.py fehlt")
+        return
+    text = pfad.read_text()
+
+    import math as _math
+    ns: dict = {"math": _math}
+    for fname in ("_runden", "bewerten"):
+        m = re.search(rf"^def {fname}\(.*?(?=\n\n\n|\n\nasync def |\n\ndef )",
+                      text, re.S | re.M)
+        if not m:
+            r.fail(name, f"{fname}() nicht gefunden — muss eine reine, "
+                         f"testbare Funktion auf Modulebene sein")
+            return
+        try:
+            exec(m.group(0), ns)
+        except Exception as e:
+            r.fail(name, f"{fname}() nicht ausführbar: {e}")
+            return
+
+    # Die Konstanten aus dem Quelltext ziehen, nicht annehmen.
+    for konst in ("MIN_MESSUNGEN", "MIN_KOPFFREIHEIT_MIN"):
+        m = re.search(rf"^{konst} = ([0-9.]+)", text, re.M)
+        if not m:
+            r.fail(name, f"{konst} nicht gefunden")
+            return
+        ns[konst] = float(m.group(1)) if "." in m.group(1) else int(m.group(1))
+
+    bewerten = ns["bewerten"]
+    min_n = ns["MIN_MESSUNGEN"]
+
+    # Untergrenze fest verdrahtet, NICHT aus dem Quelltext übernommen. Ein
+    # früherer Entwurf dieser Prüfung baute den Testfall aus MIN_MESSUNGEN
+    # selbst ("n = MIN_MESSUNGEN - 1") — und blieb prompt grün, als die
+    # Konstante auf 1 gesenkt wurde: der Testfall wanderte einfach mit. Ein
+    # Gate, das sich der Sabotage anpasst, prüft nichts.
+    # 100 ist erreichbar: der Wächter läuft alle 5 Minuten, ein 24h-Fenster
+    # liefert 288 Messungen pro Quelle.
+    if min_n < 100:
+        r.fail(name, f"MIN_MESSUNGEN = {min_n} — zu niedrig. Aus so wenigen "
+                     f"Messungen ist eine Schwelle geraten, nicht gemessen "
+                     f"(mindestens 100; 24h ergeben 288).")
+        return
+    if ns["MIN_KOPFFREIHEIT_MIN"] < 1:
+        r.fail(name, f"MIN_KOPFFREIHEIT_MIN = {ns['MIN_KOPFFREIHEIT_MIN']} — "
+                     f"ohne Kopffreiheit löst der erste Schluckauf Alarm aus")
+        return
+
+
+    class _Src:
+        def __init__(self, kind, threshold_min):
+            self.kind, self.threshold_min = kind, threshold_min
+
+    def _m(n, mx, stale=0, ohne=0):
+        return {"n": n, "max": mx, "p95": mx, "p99": mx,
+                "stale_n": stale, "ohne_daten": ohne}
+
+    gesund = _Src("takt", 20)
+    # (src, messung, erwarteter status, warum)
+    cases = [
+        (_Src("event", 48 * 60), _m(500, 100), "enthaltung",
+         "Event-Quelle — Weite ist Marktinformation, keine Schwelle daraus"),
+        (gesund, None, "enthaltung", "gar keine Messungen"),
+        (gesund, _m(0, None), "enthaltung", "n=0"),
+        (gesund, _m(min_n - 1, 1.0), "enthaltung",
+         "eine unter der Mindestzahl — DIE Regel gegen geratene Schwellen"),
+        # Feste kleine Fallzahl, unabhängig von der Konstante: senkt jemand
+        # MIN_MESSUNGEN, wandert der Fall darüber mit, dieser hier nicht.
+        (gesund, _m(10, 1.0), "enthaltung",
+         "10 Messungen sind nie genug, egal was die Konstante sagt"),
+        (gesund, _m(500, 1.0, ohne=3), "enthaltung",
+         "Messungen ohne Daten — Fenster kontaminiert"),
+        (gesund, _m(500, 1.0, stale=7), "enthaltung",
+         "Fenster enthält echten Ausfall — kontaminiert, nicht bloss unbequem"),
+        (gesund, _m(500, 1.0), "vorschlag",
+         "gesunde Datenlage, viel Luft — hier MUSS ein Vorschlag kommen"),
+        (_Src("takt", 20), _m(500, 19.0), "unveraendert",
+         "Messung fast an der Schwelle — nicht lockern"),
+        (_Src("takt", 20), _m(500, 30.0), "unveraendert",
+         "Messung ÜBER der Schwelle — erst recht nicht lockern"),
+    ]
+    for src, mess, erwartet, why in cases:
+        status, vorschlag, _ = bewerten("x", src, mess, 2.0)
+        if status != erwartet:
+            r.fail(name, f"bewerten(kind={src.kind}, n={mess['n'] if mess else None}, "
+                         f"max={mess['max'] if mess else None}) = {status!r}, "
+                         f"erwartet {erwartet!r}\nFall: {why}")
+            return
+
+    # Ein Vorschlag darf NIE unter dem gemessenen Maximum liegen — sonst baut
+    # das Werkzeug den Fehler ein, gegen den es existiert.
+    for mx in (0.5, 1.0, 5.0, 11.0, 40.6, 71.4):
+        status, vorschlag, _ = bewerten("x", _Src("takt", 100000), _m(500, mx), 2.0)
+        if status != "vorschlag":
+            r.fail(name, f"kein Vorschlag bei max={mx}min trotz gesunder Lage")
+            return
+        if vorschlag <= mx:
+            r.fail(name, f"Vorschlag {vorschlag}min liegt NICHT über dem "
+                         f"gemessenen Maximum {mx}min — garantierter Fehlalarm")
+            return
+        if vorschlag < mx + ns["MIN_KOPFFREIHEIT_MIN"]:
+            r.fail(name, f"Vorschlag {vorschlag}min lässt bei max={mx}min zu "
+                         f"wenig Kopffreiheit (mindestens "
+                         f"+{ns['MIN_KOPFFREIHEIT_MIN']}min)")
+            return
+
+    r.ok(f"{name} ({len(cases)} Fälle + Kopffreiheit)")
+
+
 def check_panels_no_invented_values(r: Result) -> None:
     """
     Kein Panel darf einen Wert erfinden, wenn die Daten fehlen.
@@ -731,6 +855,7 @@ def main() -> int:
     check_period_completeness_logic(r)
     check_alert_cooldown_logic(r)
     check_runner_concurrency(r)
+    check_schwellen_enthaltung(r)
     check_panels_no_invented_values(r)
 
     print("\n--- Mit Datenbank ---")
